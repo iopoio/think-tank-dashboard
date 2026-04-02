@@ -166,6 +166,12 @@ frontmatter: date, time, source, tags, status
 - 피드백 후 → 더 나아질 수 있는 구체적 제안 던지기
 - 실수 반복 금지 — 후추님이 수정/반박한 패턴 기억할 것
 
+## 회고 + 로드맵
+- ROADMAP.md에 진행 상황, 해야 할 것, 회고 기록 관리
+- 매주 목요일 저녁: Think 주간 회고와 함께 대시보드 회고
+- 격주 월요일: domains 점검 시 대시보드 UX도 점검
+- 세션 시작 시 ROADMAP.md 확인 → 오늘이 회고일이면 먼저 언급
+
 ## 규칙
 - 모바일 퍼스트
 - 오버엔지니어링 금지 — React/Vue 쓰지 말고 Vanilla JS로
