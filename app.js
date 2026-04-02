@@ -453,18 +453,20 @@ async function loadInboxFromGitHub() {
         }
 
         list.innerHTML = items.map((item, i) => `
-            <div class="card flex items-center justify-between group cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-xl">📄</div>
-                    <div>
-                        <h4 class="font-bold text-gray-800 dark:text-gray-100 mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ')}</h4>
+            <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
+                <div class="flex items-center gap-4 mb-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-lg">📄</div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm truncate">${item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ')}</h4>
                         <div class="text-xs text-gray-500">inbox/${item.name}</div>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="event.stopPropagation(); inboxAction('confirm', ${i})" class="p-2 rounded-lg bg-gray-100 dark:bg-dark-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-gray-500 hover:text-emerald-600 transition-colors" title="확인 (Domains로 이동)">✅</button>
-                    <button onclick="event.stopPropagation(); inboxAction('execute', ${i})" class="p-2 rounded-lg bg-gray-100 dark:bg-dark-800 hover:bg-violet-100 dark:hover:bg-violet-900/40 text-gray-500 hover:text-violet-600 transition-colors" title="실행 (마크)">▶️</button>
-                    <button onclick="event.stopPropagation(); inboxAction('pass', ${i})" class="p-2 rounded-lg bg-gray-100 dark:bg-dark-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-gray-500 hover:text-rose-600 transition-colors" title="패스 (삭제)">⏭️</button>
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="event.stopPropagation(); inboxSort('ideas', ${i})" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">💡 아이디어</button>
+                    <button onclick="event.stopPropagation(); inboxSort('domains', ${i})" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">📚 도메인</button>
+                    <button onclick="event.stopPropagation(); inboxSort('journal', ${i})" class="sort-btn text-violet-600 bg-violet-50 dark:bg-violet-900/20">📝 회고</button>
+                    <button onclick="event.stopPropagation(); inboxSort('todo', ${i})" class="sort-btn text-orange-600 bg-orange-50 dark:bg-orange-900/20">📌 할일</button>
+                    <button onclick="event.stopPropagation(); inboxSort('pass', ${i})" class="sort-btn text-gray-500 bg-gray-100 dark:bg-gray-800">⏭️ 패스</button>
                 </div>
             </div>
         `).join('');
@@ -484,7 +486,20 @@ async function openInboxItem(index) {
             Uint8Array.from(content, c => c.charCodeAt(0))
         );
 
-        openModal(item.name.replace(/\.md$/i, ''), simpleMarkdown(decoded));
+        const sortButtons = `
+            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">분류하기</p>
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="inboxSort('ideas', ${index})" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">💡 아이디어</button>
+                    <button onclick="inboxSort('domains', ${index})" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">📚 도메인</button>
+                    <button onclick="inboxSort('journal', ${index})" class="sort-btn text-violet-600 bg-violet-50 dark:bg-violet-900/20">📝 회고</button>
+                    <button onclick="inboxSort('todo', ${index})" class="sort-btn text-orange-600 bg-orange-50 dark:bg-orange-900/20">📌 할일</button>
+                    <button onclick="inboxSort('pass', ${index})" class="sort-btn text-gray-500 bg-gray-100 dark:bg-gray-800">⏭️ 패스</button>
+                </div>
+            </div>
+        `;
+
+        openModal(item.name.replace(/\.md$/i, ''), simpleMarkdown(decoded) + sortButtons);
     } catch (e) {
         alert('파일 로드 실패: ' + e.message);
     }
@@ -503,39 +518,54 @@ function simpleMarkdown(text) {
         .replace(/\n/g, '<br>');
 }
 
-async function inboxAction(action, index) {
+async function inboxSort(target, index) {
     const item = STATE.inbox[index];
     if (!item) return;
+
+    const labels = {
+        ideas: '💡 아이디어',
+        domains: '📚 도메인',
+        journal: '📝 회고',
+        todo: '📌 할일',
+        pass: '⏭️ 패스 (삭제)',
+    };
+
+    if (!confirm(`"${item.name.replace(/\.md$/i, '')}"을(를)\n${labels[target]}(으)로 보내시겠습니까?`)) return;
 
     try {
         const fileData = await ghApi.get(item.url);
 
-        if (action === 'confirm') {
-            if (!confirm('이 항목을 domains/로 이동하시겠습니까?')) return;
-            await ghApi.put(ghApi.repoUrl(`domains/${item.name}`), {
-                message: `[dashboard] 확인: ${item.name} → domains/`,
+        if (target === 'todo') {
+            // 할일은 localStorage에 추가 + inbox에서 삭제
+            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+            todos.items.unshift({
+                id: Date.now(),
+                text: title,
+                done: false,
+                createdAt: new Date().toISOString(),
+            });
+            todos.save();
+            todos.updateBadge();
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
+
+        } else if (target === 'pass') {
+            // 삭제
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
+
+        } else {
+            // ideas/, domains/, journal/ 로 이동
+            await ghApi.put(ghApi.repoUrl(`${target}/${item.name}`), {
+                message: `[dashboard] 분류: ${item.name} → ${target}/`,
                 content: fileData.content,
             });
             await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
-
-        } else if (action === 'execute') {
-            if (!confirm('이 항목을 "실행" 상태로 마크하시겠습니까?')) return;
-            const content = atob(fileData.content);
-            const newContent = `[ACTION_REQUIRED]\n\n${content}`;
-            const encoded = btoa(unescape(encodeURIComponent(newContent)));
-            await ghApi.put(ghApi.repoUrl(`inbox/${item.name}`), {
-                message: `[dashboard] 실행 마크: ${item.name}`,
-                content: encoded,
-                sha: fileData.sha,
-            });
-
-        } else if (action === 'pass') {
-            if (!confirm('이 항목을 삭제하시겠습니까?')) return;
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
         }
 
-        // 새로고침
+        // 모달 닫기 + 새로고침
+        document.getElementById('content-modal').style.display = 'none';
+        document.body.classList.remove('modal-open');
         await loadInboxFromGitHub();
+
     } catch (e) {
         alert('처리 실패: ' + e.message);
     }

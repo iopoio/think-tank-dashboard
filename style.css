@@ -89,6 +89,19 @@ body.modal-open {
     border-color: #6366f1;
 }
 
+/* 분류 버튼 */
+.sort-btn {
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: transform 0.1s, opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.sort-btn:active {
+    transform: scale(0.94);
+}
+
 /* 모바일 하단 탭바 */
 .mobile-tab {
     position: relative;
