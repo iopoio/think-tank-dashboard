@@ -450,18 +450,35 @@ function parseFrontmatter(text) {
     return meta;
 }
 
+// 확신도 점수 파싱 (🟢+1 🟡0 🔴-1, 6단계 검증 기반)
+function parseConfidence(text) {
+    const green = (text.match(/🟢/g) || []).length;
+    const yellow = (text.match(/🟡/g) || []).length;
+    const red = (text.match(/🔴/g) || []).length;
+    const total = green - red;
+    if (green + yellow + red === 0) return null; // 확신도 정보 없음
+    return { green, yellow, red, total };
+}
+
+function confidenceBadge(conf) {
+    if (!conf) return '';
+    const color = conf.total >= 3 ? 'text-emerald-500' : conf.total >= 1 ? 'text-amber-500' : 'text-red-500';
+    const label = conf.total >= 3 ? '높음' : conf.total >= 1 ? '중간' : '낮음';
+    return `<span class="text-[10px] font-bold ${color}">확신도 ${conf.total}점 (${label})</span>`;
+}
+
 // --- 자동 분류 로직 ---
 function classifyItem(meta, content) {
     const tags = Array.isArray(meta.tags) ? meta.tags : (meta.tags ? [meta.tags] : []);
     const text = content.toLowerCase();
 
-    // 태그 기반 도메인 매핑
-    const domainTags = ['투자', 'AI', 'ai', '건강', '철학', '기술', '경제', '심리', '과학', '비즈니스', '마케팅', '디자인'];
+    // Think 시스템 공식 태그 기준 (Think 클과장 확인 완료)
+    const domainTags = ['AI', 'ai', '투자', '효율화', '인테리어'];
     const ideaTags = ['아이디어', '구상', 'idea'];
     const journalTags = ['회고', '일기', '리뷰', 'journal', 'review'];
     const todoKeywords = ['해야', '할일', '예정', '마감', '기한', 'todo', '공모전', '신청'];
 
-    // 태그 매칭
+    // 태그 매칭 (우선순위: 아이디어 > 회고 > 도메인)
     for (const t of tags) {
         const tLower = t.toLowerCase();
         if (ideaTags.some(k => tLower.includes(k))) return { target: 'ideas', reason: `태그: ${t}` };
@@ -469,15 +486,15 @@ function classifyItem(meta, content) {
         if (domainTags.some(k => tLower === k.toLowerCase())) return { target: 'domains', subfolder: t, reason: `태그: ${t}` };
     }
 
-    // 내용 키워드 매칭
-    if (todoKeywords.some(k => text.includes(k))) return { target: 'todo', reason: '내용에 할일 키워드' };
+    // 내용 키워드로 할일 감지
+    if (todoKeywords.some(k => text.includes(k))) return { target: 'todo', reason: '할일 키워드 감지' };
 
     // 파일명에서 힌트
     const nameLower = (meta._filename || '').toLowerCase();
     if (nameLower.includes('회고') || nameLower.includes('journal')) return { target: 'journal', reason: '파일명' };
     if (nameLower.includes('idea') || nameLower.includes('아이디어')) return { target: 'ideas', reason: '파일명' };
 
-    // 태그가 있으면 도메인으로
+    // 태그가 있으면 도메인으로 (기타 포함)
     if (tags.length > 0) return { target: 'domains', subfolder: tags[0], reason: `태그: ${tags[0]}` };
 
     // 기본값
@@ -511,7 +528,8 @@ async function loadInboxFromGitHub() {
                 const meta = parseFrontmatter(decoded);
                 meta._filename = item.name;
                 const classification = classifyItem(meta, decoded);
-                return { ...item, fileData, decoded, meta, classification };
+                const confidence = parseConfidence(decoded);
+                return { ...item, fileData, decoded, meta, classification, confidence };
             } catch {
                 return { ...item, fileData: null, decoded: '', meta: {}, classification: { target: 'domains', subfolder: '미분류', reason: '로드 실패' } };
             }
@@ -519,47 +537,7 @@ async function loadInboxFromGitHub() {
 
         STATE.inbox = enriched;
         updateInboxBadge(enriched.length);
-
-        if (enriched.length === 0) {
-            list.innerHTML = '<div class="card text-center text-gray-500 py-12">🎉 Inbox가 비어있습니다!</div>';
-            return;
-        }
-
-        // 전체 분류 실행 버튼
-        let html = `
-            <div class="flex items-center justify-between mb-4">
-                <p class="text-sm text-gray-500">${enriched.length}개 항목 자동 분류됨</p>
-                <button onclick="executeAllClassify()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all">전체 분류 실행</button>
-            </div>
-        `;
-
-        html += enriched.map((item, i) => {
-            const c = item.classification;
-            const icon = CLASSIFY_ICONS[c.target] || '📄';
-            const label = CLASSIFY_LABELS[c.target] || c.target;
-            const sub = c.subfolder ? ` / ${c.subfolder}` : '';
-            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
-
-            return `
-            <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
-                <div class="flex items-center gap-3 mb-2">
-                    <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm flex-1 truncate">${title}</h4>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="sort-btn ${c.target === 'ideas' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : c.target === 'journal' ? 'text-violet-600 bg-violet-50 dark:bg-violet-900/20' : c.target === 'todo' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' : 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'}">${icon} ${label}${sub}</span>
-                    <span class="text-[10px] text-gray-400">${c.reason}</span>
-                </div>
-                <div class="flex gap-1.5 mt-3 flex-wrap">
-                    <button onclick="event.stopPropagation(); reclassify(${i}, 'ideas')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'ideas' ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">💡</button>
-                    <button onclick="event.stopPropagation(); reclassify(${i}, 'domains')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'domains' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📚</button>
-                    <button onclick="event.stopPropagation(); reclassify(${i}, 'journal')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'journal' ? 'bg-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📝</button>
-                    <button onclick="event.stopPropagation(); reclassify(${i}, 'todo')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'todo' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📌</button>
-                    <button onclick="event.stopPropagation(); reclassify(${i}, 'pass')" class="text-[10px] px-2 py-1 rounded-lg text-gray-400 bg-gray-100 dark:bg-gray-800">✕</button>
-                </div>
-            </div>`;
-        }).join('');
-
-        list.innerHTML = html;
+        renderInboxList();
     } catch (e) {
         list.innerHTML = '<div class="card text-center text-gray-500 py-12">inbox/ 폴더를 찾을 수 없습니다.</div>';
     }
@@ -587,43 +565,51 @@ function reclassify(index, newTarget) {
     renderInboxList();
 }
 
+function renderInboxCard(item, i) {
+    const c = item.classification;
+    const icon = CLASSIFY_ICONS[c.target] || '📄';
+    const label = CLASSIFY_LABELS[c.target] || c.target;
+    const sub = c.subfolder ? ` / ${c.subfolder}` : '';
+    const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+    const confHtml = confidenceBadge(item.confidence);
+    const colorClass = c.target === 'ideas' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : c.target === 'journal' ? 'text-violet-600 bg-violet-50 dark:bg-violet-900/20' : c.target === 'todo' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' : 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20';
+
+    return `
+    <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
+        <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm flex-1 truncate mr-2">${title}</h4>
+            ${confHtml}
+        </div>
+        <div class="flex items-center justify-between mb-3">
+            <span class="sort-btn ${colorClass}">${icon} ${label}${sub}</span>
+            <span class="text-[10px] text-gray-400">${c.reason}</span>
+        </div>
+        <div class="flex gap-1.5 flex-wrap">
+            <button onclick="event.stopPropagation(); reclassify(${i}, 'ideas')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'ideas' ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">💡</button>
+            <button onclick="event.stopPropagation(); reclassify(${i}, 'domains')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'domains' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📚</button>
+            <button onclick="event.stopPropagation(); reclassify(${i}, 'journal')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'journal' ? 'bg-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📝</button>
+            <button onclick="event.stopPropagation(); reclassify(${i}, 'todo')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'todo' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📌</button>
+            <button onclick="event.stopPropagation(); reclassify(${i}, 'pass')" class="text-[10px] px-2 py-1 rounded-lg text-gray-400 bg-gray-100 dark:bg-gray-800">✕</button>
+        </div>
+    </div>`;
+}
+
 function renderInboxList() {
     const enriched = STATE.inbox;
     const list = document.getElementById('inbox-list');
 
+    if (!enriched || enriched.length === 0) {
+        list.innerHTML = '<div class="card text-center text-gray-500 py-12">🎉 Inbox가 비어있습니다!</div>';
+        return;
+    }
+
     let html = `
         <div class="flex items-center justify-between mb-4">
-            <p class="text-sm text-gray-500">${enriched.length}개 항목</p>
+            <p class="text-sm text-gray-500">${enriched.length}개 항목 자동 분류됨</p>
             <button onclick="executeAllClassify()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all">전체 분류 실행</button>
         </div>
     `;
-
-    html += enriched.map((item, i) => {
-        const c = item.classification;
-        const icon = CLASSIFY_ICONS[c.target] || '📄';
-        const label = CLASSIFY_LABELS[c.target] || c.target;
-        const sub = c.subfolder ? ` / ${c.subfolder}` : '';
-        const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
-
-        return `
-        <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
-            <div class="flex items-center gap-3 mb-2">
-                <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm flex-1 truncate">${title}</h4>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="sort-btn ${c.target === 'ideas' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : c.target === 'journal' ? 'text-violet-600 bg-violet-50 dark:bg-violet-900/20' : c.target === 'todo' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' : 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'}">${icon} ${label}${sub}</span>
-                <span class="text-[10px] text-gray-400">${c.reason}</span>
-            </div>
-            <div class="flex gap-1.5 mt-3 flex-wrap">
-                <button onclick="event.stopPropagation(); reclassify(${i}, 'ideas')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'ideas' ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">💡</button>
-                <button onclick="event.stopPropagation(); reclassify(${i}, 'domains')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'domains' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📚</button>
-                <button onclick="event.stopPropagation(); reclassify(${i}, 'journal')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'journal' ? 'bg-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📝</button>
-                <button onclick="event.stopPropagation(); reclassify(${i}, 'todo')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'todo' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📌</button>
-                <button onclick="event.stopPropagation(); reclassify(${i}, 'pass')" class="text-[10px] px-2 py-1 rounded-lg text-gray-400 bg-gray-100 dark:bg-gray-800">✕</button>
-            </div>
-        </div>`;
-    }).join('');
-
+    html += enriched.map((item, i) => renderInboxCard(item, i)).join('');
     list.innerHTML = html;
 }
 
