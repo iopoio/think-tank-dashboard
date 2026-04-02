@@ -150,6 +150,7 @@ function bootApp() {
         renderJournal();
     }
     updateStatsUI();
+    todos.updateBadge();
 }
 
 // --- Initialization ---
@@ -163,20 +164,31 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- Theme Management ---
 function initTheme() {
     const toggle = document.getElementById('dark-mode-toggle');
+    const toggleMobile = document.getElementById('dark-mode-toggle-mobile');
     const icon = document.getElementById('theme-icon');
-    
+    const iconMobile = document.getElementById('theme-icon-mobile');
+
+    function updateIcons() {
+        const emoji = STATE.theme === 'dark' ? '☀️' : '🌙';
+        if (icon) icon.textContent = emoji;
+        if (iconMobile) iconMobile.textContent = emoji;
+    }
+
     // Apply saved theme
     if (STATE.theme === 'dark') {
         document.documentElement.classList.add('dark');
-        icon.textContent = '☀️';
     }
+    updateIcons();
 
-    toggle.addEventListener('click', () => {
+    function toggleTheme() {
         STATE.theme = STATE.theme === 'light' ? 'dark' : 'light';
         document.documentElement.classList.toggle('dark');
-        icon.textContent = STATE.theme === 'dark' ? '☀️' : '🌙';
+        updateIcons();
         localStorage.setItem('theme', STATE.theme);
-    });
+    }
+
+    if (toggle) toggle.addEventListener('click', toggleTheme);
+    if (toggleMobile) toggleMobile.addEventListener('click', toggleTheme);
 }
 
 // --- Tab Navigation ---
@@ -184,25 +196,27 @@ function initTabs() {
     window.switchTab = (tabId) => {
         // Update State
         STATE.activeTab = tabId;
-        
-        // Update UI Tabs
+
+        // Update desktop sidebar tabs
         document.querySelectorAll('.nav-item').forEach(item => {
-            if (item.dataset.tab === tabId) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
+            item.classList.toggle('active', item.dataset.tab === tabId);
         });
-        
+
+        // Update mobile bottom tabs
+        document.querySelectorAll('.mobile-tab').forEach(item => {
+            item.classList.toggle('active', item.dataset.tab === tabId);
+        });
+
         // Update UI Panes
         document.querySelectorAll('.tab-pane').forEach(pane => {
-            if (pane.id === `tab-${tabId}`) {
-                pane.classList.remove('hidden');
-            } else {
-                pane.classList.add('hidden');
-            }
+            pane.classList.toggle('hidden', pane.id !== `tab-${tabId}`);
         });
-        
+
+        // 할일 탭 진입 시 렌더링
+        if (tabId === 'todos') {
+            todos.render();
+        }
+
         // Refresh charts if needed
         if (tabId === 'stats') {
             refreshCharts();
@@ -336,45 +350,46 @@ function openModal(title, bodyHtml) {
     document.body.classList.add('modal-open');
 }
 
+function githubConnectHandler() {
+    if (ghApi.isConnected()) {
+        if (confirm('GitHub 연결을 해제하시겠습니까?')) {
+            ghApi.token = null;
+            localStorage.removeItem('gh_token');
+            updateAuthUI();
+            renderInbox();
+            renderIdeas();
+            renderDomains();
+            renderJournal();
+        }
+    } else {
+        const token = prompt(
+            'GitHub Personal Access Token을 입력하세요.\n\n' +
+            '생성 경로:\n' +
+            'GitHub → Settings → Developer settings\n' +
+            '→ Personal access tokens → Fine-grained tokens\n' +
+            '→ Generate new token\n\n' +
+            '권한: think-tank-inbox 리포에 Contents Read/Write'
+        );
+        if (token && token.trim()) {
+            ghApi.token = token.trim();
+            localStorage.setItem('gh_token', token.trim());
+            updateAuthUI();
+            loadLiveData();
+        }
+    }
+}
+
 function initGitHubAuth() {
     const connectBtn = document.getElementById('connect-github');
+    const connectBtnMobile = document.getElementById('connect-github-mobile');
     const refreshBtn = document.getElementById('refresh-all');
 
     updateAuthUI();
 
-    connectBtn.addEventListener('click', () => {
-        if (ghApi.isConnected()) {
-            // 이미 연결됨 → 연결 해제
-            if (confirm('GitHub 연결을 해제하시겠습니까?')) {
-                ghApi.token = null;
-                localStorage.removeItem('gh_token');
-                updateAuthUI();
-                // Mock 데이터로 복원
-                renderInbox();
-                renderIdeas();
-                renderDomains();
-                renderJournal();
-            }
-        } else {
-            // 토큰 입력
-            const token = prompt(
-                'GitHub Personal Access Token을 입력하세요.\n\n' +
-                '생성 경로:\n' +
-                'GitHub → Settings → Developer settings\n' +
-                '→ Personal access tokens → Fine-grained tokens\n' +
-                '→ Generate new token\n\n' +
-                '권한: think-tank-inbox 리포에 Contents Read/Write'
-            );
-            if (token && token.trim()) {
-                ghApi.token = token.trim();
-                localStorage.setItem('gh_token', token.trim());
-                updateAuthUI();
-                loadLiveData();
-            }
-        }
-    });
+    if (connectBtn) connectBtn.addEventListener('click', githubConnectHandler);
+    if (connectBtnMobile) connectBtnMobile.addEventListener('click', githubConnectHandler);
 
-    refreshBtn.addEventListener('click', () => {
+    if (refreshBtn) refreshBtn.addEventListener('click', () => {
         if (ghApi.isConnected()) {
             loadLiveData();
         } else {
@@ -384,14 +399,17 @@ function initGitHubAuth() {
 }
 
 function updateAuthUI() {
-    const btn = document.getElementById('connect-github');
-    if (ghApi.isConnected()) {
-        btn.innerHTML = '<span>✓ 연결됨</span>';
-        btn.classList.add('!bg-emerald-600', 'dark:!bg-emerald-600', 'dark:!text-white');
-    } else {
-        btn.innerHTML = '<span>GitHub 연결</span>';
-        btn.classList.remove('!bg-emerald-600', 'dark:!bg-emerald-600', 'dark:!text-white');
-    }
+    ['connect-github', 'connect-github-mobile'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        if (ghApi.isConnected()) {
+            btn.innerHTML = '<span>✓ 연결됨</span>';
+            btn.classList.add('!bg-emerald-600', 'dark:!bg-emerald-600', 'dark:!text-white');
+        } else {
+            btn.innerHTML = '<span>GitHub 연결</span>';
+            btn.classList.remove('!bg-emerald-600', 'dark:!bg-emerald-600', 'dark:!text-white');
+        }
+    });
 }
 
 async function loadLiveData() {
@@ -422,8 +440,12 @@ async function loadInboxFromGitHub() {
         const items = files.filter(f => f.type === 'file');
 
         STATE.inbox = items;
-        document.getElementById('inbox-badge').textContent = items.length;
-        document.getElementById('inbox-badge').classList.toggle('hidden', items.length === 0);
+        ['inbox-badge', 'inbox-badge-mobile'].forEach(id => {
+            const b = document.getElementById(id);
+            if (!b) return;
+            b.textContent = items.length;
+            b.classList.toggle('hidden', items.length === 0);
+        });
 
         if (items.length === 0) {
             list.innerHTML = '<div class="card text-center text-gray-500 py-12">🎉 Inbox가 비어있습니다!</div>';
@@ -741,3 +763,114 @@ function renderJournal() {
         </div>
     `).join('');
 }
+
+// --- 할일 (Todo) 모듈 ---
+const todos = {
+    items: JSON.parse(localStorage.getItem('tt_todos') || '[]'),
+    filter: 'all',
+
+    save() {
+        localStorage.setItem('tt_todos', JSON.stringify(this.items));
+    },
+
+    add() {
+        const input = document.getElementById('todo-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        this.items.unshift({
+            id: Date.now(),
+            text: text,
+            done: false,
+            createdAt: new Date().toISOString(),
+        });
+        this.save();
+        this.render();
+        input.value = '';
+        input.focus();
+    },
+
+    toggle(id) {
+        const item = this.items.find(t => t.id === id);
+        if (item) {
+            item.done = !item.done;
+            if (item.done) item.doneAt = new Date().toISOString();
+            this.save();
+            this.render();
+        }
+    },
+
+    remove(id) {
+        this.items = this.items.filter(t => t.id !== id);
+        this.save();
+        this.render();
+    },
+
+    setFilter(f) {
+        this.filter = f;
+        document.querySelectorAll('.todo-filter').forEach(btn => {
+            const label = { all: '전체', pending: '미완료', done: '완료' }[f];
+            btn.classList.toggle('active', btn.textContent.trim() === label);
+        });
+        this.render();
+    },
+
+    getFiltered() {
+        if (this.filter === 'pending') return this.items.filter(t => !t.done);
+        if (this.filter === 'done') return this.items.filter(t => t.done);
+        return this.items;
+    },
+
+    updateBadge() {
+        const count = this.items.filter(t => !t.done).length;
+        ['todo-badge', 'todo-badge-mobile'].forEach(id => {
+            const badge = document.getElementById(id);
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        });
+    },
+
+    formatDate(iso) {
+        const d = new Date(iso);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+    },
+
+    render() {
+        const list = document.getElementById('todo-list');
+        if (!list) return;
+        const filtered = this.getFiltered();
+        this.updateBadge();
+
+        if (filtered.length === 0) {
+            const msg = this.filter === 'done' ? '완료된 할일이 없습니다.'
+                      : this.filter === 'pending' ? '모두 완료했습니다!'
+                      : '할일을 추가해보세요.';
+            list.innerHTML = `<div class="card text-center text-gray-500 py-12">${msg}</div>`;
+            return;
+        }
+
+        list.innerHTML = filtered.map(t => `
+            <div class="card flex items-center gap-4 group ${t.done ? 'opacity-60' : ''}">
+                <button onclick="todos.toggle(${t.id})" class="w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors ${t.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 dark:border-gray-600 hover:border-indigo-500'}">
+                    ${t.done ? '✓' : ''}
+                </button>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium ${t.done ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-100'}">${this.escapeHtml(t.text)}</p>
+                    <p class="text-xs text-gray-400 mt-1">${this.formatDate(t.createdAt)}에 추가${t.done && t.doneAt ? ' · ' + this.formatDate(t.doneAt) + '에 완료' : ''}</p>
+                </div>
+                <button onclick="todos.remove(${t.id})" class="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all" title="삭제">✕</button>
+            </div>
+        `).join('');
+    },
+
+    escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+};

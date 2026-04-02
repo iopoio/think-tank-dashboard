@@ -73,3 +73,43 @@ body.modal-open {
 .dark .card:hover {
     box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
 }
+
+/* 할일 필터 버튼 */
+.todo-filter {
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid transparent;
+}
+.todo-filter:hover {
+    color: #6366f1;
+}
+.todo-filter.active {
+    background: #6366f1;
+    color: white;
+    border-color: #6366f1;
+}
+
+/* 모바일 하단 탭바 */
+.mobile-tab {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    color: #94a3b8;
+    transition: color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+.mobile-tab.active {
+    color: #6366f1;
+}
+.mobile-tab:active {
+    transform: scale(0.92);
+}
+
+/* iOS safe area */
+.safe-bottom {
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+}

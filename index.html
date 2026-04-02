@@ -77,7 +77,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-300 antialiased overflow-hidden">
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-300 antialiased">
     <!-- PIN 잠금 화면 -->
     <div id="lock-screen" class="fixed inset-0 z-[999] bg-gray-950 flex items-center justify-center" style="display:none;">
         <div class="text-center p-8 w-full max-w-xs">
@@ -95,8 +95,8 @@
     </div>
 
     <div id="app" class="h-screen flex flex-col md:flex-row" style="display:none;">
-        <!-- Sidebar / Navigation -->
-        <aside class="sidebar w-full md:w-72 bg-white dark:bg-dark-900 border-r border-gray-100 dark:border-gray-800 p-6 flex flex-col z-20">
+        <!-- 데스크톱 사이드바 (모바일에서 숨김) -->
+        <aside class="sidebar hidden md:flex w-72 bg-white dark:bg-dark-900 border-r border-gray-100 dark:border-gray-800 p-6 flex-col z-20 h-screen sticky top-0">
             <div class="flex items-center justify-between mb-10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
@@ -108,10 +108,10 @@
                     <span id="theme-icon" class="text-xl">🌙</span>
                 </button>
             </div>
-            
+
             <nav class="space-y-2 flex-grow overflow-y-auto">
                 <div class="nav-item active" data-tab="inbox" onclick="switchTab('inbox')">
-                    <span class="mr-3 text-lg">📥</span> 
+                    <span class="mr-3 text-lg">📥</span>
                     <span class="flex-grow">받은함 (Inbox)</span>
                     <span id="inbox-badge" class="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-md font-bold hidden">0</span>
                 </div>
@@ -124,11 +124,16 @@
                 <div class="nav-item" data-tab="journal" onclick="switchTab('journal')">
                     <span class="mr-3 text-lg">📝</span> 회고 (Journal)
                 </div>
+                <div class="nav-item" data-tab="todos" onclick="switchTab('todos')">
+                    <span class="mr-3 text-lg">📌</span>
+                    <span class="flex-grow">할일 (Todo)</span>
+                    <span id="todo-badge" class="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-md font-bold hidden">0</span>
+                </div>
                 <div class="nav-item" data-tab="stats" onclick="switchTab('stats')">
                     <span class="mr-3 text-lg">📊</span> 통계 (Statistics)
                 </div>
             </nav>
-            
+
             <!-- Reminders Section (Desktop) -->
             <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800">
                 <h3 class="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-3 mb-4">리마인더 (Reminders)</h3>
@@ -149,8 +154,26 @@
             </div>
         </aside>
 
+        <!-- 모바일 상단 헤더 -->
+        <header class="md:hidden sticky top-0 z-30 bg-white/90 dark:bg-dark-900/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                        <span class="text-white font-bold text-sm font-outfit">T</span>
+                    </div>
+                    <span class="font-extrabold font-outfit text-lg bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">Think Tank</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="dark-mode-toggle-mobile" class="p-2 rounded-lg" title="테마 전환">
+                        <span id="theme-icon-mobile" class="text-lg">🌙</span>
+                    </button>
+                    <button id="connect-github-mobile" class="px-3 py-1.5 rounded-lg bg-dark-900 dark:bg-white text-white dark:text-dark-900 font-bold text-xs">GitHub 연결</button>
+                </div>
+            </div>
+        </header>
+
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-dark-950 p-4 md:p-10">
+        <main class="flex-1 min-h-0 overflow-y-auto bg-gray-50/50 dark:bg-dark-950 p-4 pb-24 md:pb-10 md:p-10">
             <!-- Header/Search -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                 <div class="relative w-full max-w-xl group">
@@ -218,6 +241,31 @@
                     </div>
                 </section>
 
+                <!-- 할일 Tab -->
+                <section id="tab-todos" class="tab-pane hidden">
+                    <div class="flex items-end justify-between mb-8">
+                        <div>
+                            <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">📌 할일 (Todo)</h2>
+                            <p class="text-gray-500 dark:text-gray-400">나중에 해야 할 것들을 모아두세요.</p>
+                        </div>
+                    </div>
+                    <!-- 할일 입력 -->
+                    <div class="flex gap-3 mb-6">
+                        <input id="todo-input" type="text" placeholder="할일을 입력하세요..."
+                            class="flex-1 py-3 px-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                            onkeydown="if(event.key==='Enter') todos.add()">
+                        <button onclick="todos.add()" class="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all">추가</button>
+                    </div>
+                    <!-- 필터 -->
+                    <div class="flex gap-2 mb-6">
+                        <button onclick="todos.setFilter('all')" class="todo-filter active px-3 py-1.5 rounded-xl text-xs font-bold transition-all">전체</button>
+                        <button onclick="todos.setFilter('pending')" class="todo-filter px-3 py-1.5 rounded-xl text-xs font-bold transition-all">미완료</button>
+                        <button onclick="todos.setFilter('done')" class="todo-filter px-3 py-1.5 rounded-xl text-xs font-bold transition-all">완료</button>
+                    </div>
+                    <!-- 할일 목록 -->
+                    <div id="todo-list" class="space-y-3"></div>
+                </section>
+
                 <!-- Statistics Tab -->
                 <section id="tab-stats" class="tab-pane hidden">
                     <div class="mb-8">
@@ -264,6 +312,38 @@
                 </section>
             </div>
         </main>
+
+        <!-- 모바일 하단 탭바 -->
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-dark-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 px-2 py-1 safe-bottom">
+            <div class="flex justify-around">
+                <button class="mobile-tab active" data-tab="inbox" onclick="switchTab('inbox')">
+                    <span class="text-lg">📥</span>
+                    <span class="text-[10px]">받은함</span>
+                    <span id="inbox-badge-mobile" class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold hidden">0</span>
+                </button>
+                <button class="mobile-tab" data-tab="ideas" onclick="switchTab('ideas')">
+                    <span class="text-lg">💡</span>
+                    <span class="text-[10px]">아이디어</span>
+                </button>
+                <button class="mobile-tab" data-tab="domains" onclick="switchTab('domains')">
+                    <span class="text-lg">📚</span>
+                    <span class="text-[10px]">도메인</span>
+                </button>
+                <button class="mobile-tab" data-tab="todos" onclick="switchTab('todos')">
+                    <span class="text-lg">📌</span>
+                    <span class="text-[10px]">할일</span>
+                    <span id="todo-badge-mobile" class="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold hidden">0</span>
+                </button>
+                <button class="mobile-tab" data-tab="journal" onclick="switchTab('journal')">
+                    <span class="text-lg">📝</span>
+                    <span class="text-[10px]">회고</span>
+                </button>
+                <button class="mobile-tab" data-tab="stats" onclick="switchTab('stats')">
+                    <span class="text-lg">📊</span>
+                    <span class="text-[10px]">통계</span>
+                </button>
+            </div>
+        </nav>
     </div>
 
     <!-- Modal -->
