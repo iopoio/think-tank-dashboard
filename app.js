@@ -532,7 +532,8 @@ async function loadInboxFromGitHub() {
 
     try {
         const files = await ghApi.get(ghApi.repoUrl('inbox/'));
-        const items = files.filter(f => f.type === 'file');
+        const items = files.filter(f => f.type === 'file')
+            .sort((a, b) => b.name.localeCompare(a.name)); // 최신순
 
         // 각 파일 내용 읽기 + 분류
         const enriched = await Promise.all(items.map(async (item) => {
@@ -725,35 +726,88 @@ function simpleMarkdown(text) {
 }
 
 // --- 읽음/안읽음 관리 (localStorage) ---
+// 상태: null(미읽음) → 'later'(나중으로) → 'done'(완료)
 const readStatus = {
     _key: 'tt_read_items',
     _data: null,
 
     getData() {
-        if (!this._data) this._data = JSON.parse(localStorage.getItem(this._key) || '{}');
+        if (!this._data) {
+            const raw = JSON.parse(localStorage.getItem(this._key) || '{}');
+            // 마이그레이션: 기존 string(ISO날짜) → {status, date} 객체
+            for (const k in raw) {
+                if (typeof raw[k] === 'string') raw[k] = { status: 'done', date: raw[k] };
+            }
+            this._data = raw;
+        }
         return this._data;
     },
 
-    isRead(path) {
-        return !!this.getData()[path];
+    _save() { localStorage.setItem(this._key, JSON.stringify(this._data)); },
+
+    getStatus(path) {
+        const d = this.getData()[path];
+        return d ? d.status : null; // null=미읽음, 'later', 'done'
     },
 
+    isRead(path) { return !!this.getData()[path]; },
+
     markRead(path) {
+        // 처음 읽으면 일단 기본 'read' (나중에 액션으로 변경)
         const d = this.getData();
-        d[path] = new Date().toISOString();
-        localStorage.setItem(this._key, JSON.stringify(d));
+        if (!d[path]) d[path] = { status: 'read', date: new Date().toISOString() };
+        this._save();
+    },
+
+    markLater(path) {
+        const d = this.getData();
+        d[path] = { status: 'later', date: new Date().toISOString() };
+        this._save();
+    },
+
+    markDone(path) {
+        const d = this.getData();
+        d[path] = { status: 'done', date: new Date().toISOString() };
+        this._save();
     },
 
     unmark(path) {
         const d = this.getData();
         delete d[path];
-        localStorage.setItem(this._key, JSON.stringify(d));
+        this._save();
+    },
+
+    countByStatus(paths, status) {
+        return paths.filter(p => this.getStatus(p) === status).length;
     },
 
     countUnread(paths) {
         return paths.filter(p => !this.isRead(p)).length;
     }
 };
+
+// --- 상태 표시 헬퍼 ---
+function statusIndicator(path) {
+    const s = readStatus.getStatus(path);
+    if (s === 'done') return { icon: '✓', color: 'text-emerald-500', label: '완료', opacity: 'opacity-50', sort: 2 };
+    if (s === 'later') return { icon: '⏳', color: 'text-blue-500', label: '나중으로', opacity: '', sort: 1 };
+    if (s === 'read') return { icon: '○', color: 'text-gray-400', label: '읽음', opacity: '', sort: 1 };
+    return { icon: '●', color: 'text-amber-500', label: '안읽음', opacity: '', sort: 0 };
+}
+
+function renderItemCard(item, path, title, section) {
+    const st = statusIndicator(path);
+    return `
+    <div class="card cursor-pointer transition-all ${st.opacity}" onclick="openItemViewer('${item.url}', '${path}', '${title.replace(/'/g, "\\'")}', '${section}')">
+        <div class="flex items-center gap-3">
+            <span class="${st.color} text-sm">${st.icon}</span>
+            <div class="flex-1 min-w-0">
+                <h4 class="font-bold text-sm truncate">${title}</h4>
+                <p class="text-[10px] ${st.color}">${st.label}</p>
+            </div>
+        </div>
+    </div>`;
+}
 
 // --- 공통 아이템 뷰어 (모달 + 읽음 표시 + 액션 버튼) ---
 async function openItemViewer(url, path, title, section) {
@@ -773,8 +827,9 @@ async function openItemViewer(url, path, title, section) {
             <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">액션</p>
                 <div class="flex gap-2 flex-wrap">
+                    <button onclick="itemAction('done', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20">✅ 완료</button>
                     <button onclick="itemAction('develop', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">🚀 발전시키기</button>
-                    <button onclick="itemAction('later', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">⏳ 나중으로</button>
+                    <button onclick="itemAction('later', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-blue-600 bg-blue-50 dark:bg-blue-900/20">⏳ 나중으로</button>
                     <button onclick="itemAction('delete', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-red-500 bg-red-50 dark:bg-red-900/20">🗑️ 삭제</button>
                 </div>
             </div>
@@ -792,10 +847,12 @@ async function openItemViewer(url, path, title, section) {
 async function itemAction(action, path, encodedTitle) {
     const title = decodeURIComponent(encodedTitle);
 
-    if (action === 'develop') {
+    if (action === 'done') {
+        readStatus.markDone(path);
+
+    } else if (action === 'develop') {
         const note = prompt(`"${title}" 발전시키기\n\n추가할 메모나 아이디어를 적어주세요:`);
         if (note === null) return;
-        // 할일에 추가 + 메모
         todos.items.unshift({
             id: Date.now(),
             text: `🚀 ${title}: ${note || '발전시키기'}`,
@@ -804,11 +861,10 @@ async function itemAction(action, path, encodedTitle) {
         });
         todos.save();
         todos.updateBadge();
-        alert('할일에 추가됨!');
+        readStatus.markDone(path);
 
     } else if (action === 'later') {
-        readStatus.unmark(path); // 안읽음으로 되돌림
-        alert('나중으로 미뤘습니다. (안읽음 상태로 복원)');
+        readStatus.markLater(path);
 
     } else if (action === 'delete') {
         if (!confirm(`"${title}"을(를) 삭제하시겠습니까?`)) return;
@@ -856,6 +912,31 @@ function updateStats() {
 }
 
 // --- Ideas 로드 ---
+// 공통: 항목 리스트 렌더링 (미읽음→나중으로→완료 순 정렬, 완료는 하단)
+function renderSortedItems(items, section, prefix) {
+    const mapped = items.map(item => {
+        const path = prefix ? `${prefix}/${item.name}` : `${section}/${item.name}`;
+        const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+        const st = statusIndicator(path);
+        return { item, path, title, st };
+    });
+    // 정렬: 미읽음(0) → 나중으로/읽음(1) → 완료(2)
+    mapped.sort((a, b) => a.st.sort - b.st.sort);
+    return mapped.map(m => renderItemCard(m.item, m.path, m.title, section)).join('');
+}
+
+function statusSummary(items, prefix) {
+    const paths = items.map(f => `${prefix}/${f.name}`);
+    const unread = readStatus.countUnread(paths);
+    const later = readStatus.countByStatus(paths, 'later');
+    const done = readStatus.countByStatus(paths, 'done');
+    const parts = [];
+    if (unread > 0) parts.push(`<span class="text-amber-500">${unread} 안읽음</span>`);
+    if (later > 0) parts.push(`<span class="text-blue-500">${later} 나중으로</span>`);
+    if (done > 0) parts.push(`<span class="text-emerald-500">${done} 완료</span>`);
+    return parts.length > 0 ? `<p class="text-xs font-bold mb-4">${parts.join(' · ')}</p>` : '';
+}
+
 async function loadIdeasFromGitHub() {
     const list = document.getElementById('ideas-list');
     list.innerHTML = '<div class="card animate-pulse h-24"></div>';
@@ -866,24 +947,7 @@ async function loadIdeasFromGitHub() {
             list.innerHTML = '<div class="card text-center text-gray-500 py-12">아이디어가 없습니다.</div>';
             return;
         }
-        const unread = readStatus.countUnread(items.map(f => `ideas/${f.name}`));
-        let html = unread > 0 ? `<p class="text-sm text-amber-500 font-bold mb-4">${unread}건 안읽음</p>` : '';
-        html += items.map(item => {
-            const path = `ideas/${item.name}`;
-            const isRead = readStatus.isRead(path);
-            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
-            return `
-            <div class="card cursor-pointer hover:-translate-y-1 transition-all ${isRead ? 'opacity-60' : ''}" onclick="openItemViewer('${item.url}', '${path}', '${title}', 'ideas')">
-                <div class="flex items-center gap-3">
-                    <span class="${isRead ? 'text-emerald-500' : 'text-amber-500'}">${isRead ? '✓' : '●'}</span>
-                    <div>
-                        <h4 class="font-extrabold text-base mb-1">${title}</h4>
-                        <p class="text-xs text-gray-500">${isRead ? '읽음' : '안읽음'}</p>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-        list.innerHTML = html;
+        list.innerHTML = statusSummary(items, 'ideas') + renderSortedItems(items, 'ideas');
     } catch (e) {
         list.innerHTML = '<div class="card text-center text-gray-500 py-12">ideas/ 폴더를 찾을 수 없습니다.</div>';
     }
@@ -893,56 +957,34 @@ async function loadIdeasFromGitHub() {
 async function loadDomainsFromGitHub() {
     const container = document.getElementById('domains-grid');
     container.innerHTML = '<div class="card animate-pulse h-32 col-span-full"></div>';
+    const domainIcons = { 'AI': '🤖', '투자': '💰', '효율화': '⚡', '인테리어': '🏠', '기타': '📦', '미분류': '📄' };
+    const domainColors = { 'AI': 'from-indigo-400 to-indigo-600', '투자': 'from-amber-400 to-orange-500', '효율화': 'from-emerald-400 to-teal-600', '인테리어': 'from-pink-400 to-rose-500', '기타': 'from-gray-400 to-gray-500' };
     try {
         const folders = await ghApi.get(ghApi.repoUrl('domains/'));
-        const domainIcons = { 'AI': '🤖', '투자': '💰', '효율화': '⚡', '인테리어': '🏠', '기타': '📦', '미분류': '📄' };
-        const domainColors = { 'AI': 'from-indigo-400 to-indigo-600', '투자': 'from-amber-400 to-orange-500', '효율화': 'from-emerald-400 to-teal-600', '인테리어': 'from-pink-400 to-rose-500', '기타': 'from-gray-400 to-gray-500' };
-
-        // 각 폴더의 파일 목록 로드
         let allHtml = '';
         for (const folder of folders) {
             if (folder.type !== 'dir') continue;
             const icon = domainIcons[folder.name] || '📁';
             const color = domainColors[folder.name] || 'from-violet-400 to-purple-600';
-
             try {
                 const files = await ghApi.get(folder.url);
                 const items = files.filter(f => f.type === 'file');
-                const unread = readStatus.countUnread(items.map(f => `domains/${folder.name}/${f.name}`));
-
+                const prefix = `domains/${folder.name}`;
                 allHtml += `
                 <div class="col-span-full">
-                    <div class="flex items-center gap-3 mb-4 mt-6">
+                    <div class="flex items-center gap-3 mb-3 mt-6">
                         <div class="w-10 h-10 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center text-xl text-white">${icon}</div>
                         <div>
                             <h3 class="font-extrabold text-lg font-outfit">${folder.name}</h3>
-                            <p class="text-xs text-gray-500">${items.length}건${unread > 0 ? ` · <span class="text-amber-500 font-bold">${unread}건 안읽음</span>` : ''}</p>
+                            ${statusSummary(items, prefix)}
                         </div>
                     </div>
                 </div>`;
-
-                if (items.length === 0) {
-                    allHtml += '<div class="col-span-full text-sm text-gray-500 pl-14 mb-4">비어있음</div>';
-                } else {
-                    allHtml += items.map(item => {
-                        const path = `domains/${folder.name}/${item.name}`;
-                        const isRead = readStatus.isRead(path);
-                        const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
-                        return `
-                        <div class="card cursor-pointer hover:-translate-y-1 transition-all ${isRead ? 'opacity-60' : ''}" onclick="openItemViewer('${item.url}', '${path}', '${title}', 'domains')">
-                            <div class="flex items-center gap-3">
-                                <span class="${isRead ? 'text-emerald-500' : 'text-amber-500'}">${isRead ? '✓' : '●'}</span>
-                                <div>
-                                    <h4 class="font-bold text-sm mb-1">${title}</h4>
-                                    <p class="text-xs text-gray-500">${isRead ? '읽음' : '안읽음'}</p>
-                                </div>
-                            </div>
-                        </div>`;
-                    }).join('');
-                }
+                allHtml += items.length === 0
+                    ? '<div class="col-span-full text-sm text-gray-500 pl-14 mb-4">비어있음</div>'
+                    : renderSortedItems(items, 'domains', prefix);
             } catch { /* 빈 폴더 무시 */ }
         }
-
         container.innerHTML = allHtml || '<div class="card text-center text-gray-500 py-12 col-span-full">도메인이 없습니다.</div>';
     } catch (e) {
         container.innerHTML = '<div class="card text-center text-gray-500 py-12 col-span-full">domains/ 폴더를 찾을 수 없습니다.</div>';
@@ -960,21 +1002,7 @@ async function loadJournalFromGitHub() {
             list.innerHTML = '<div class="card text-center text-gray-500 py-12">회고가 없습니다.</div>';
             return;
         }
-        list.innerHTML = items.map(item => {
-            const path = `journal/${item.name}`;
-            const isRead = readStatus.isRead(path);
-            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
-            return `
-            <div class="card cursor-pointer hover:translate-x-1 transition-transform ${isRead ? 'opacity-60' : ''}" onclick="openItemViewer('${item.url}', '${path}', '${title}', 'journal')">
-                <div class="flex items-center gap-3">
-                    <span class="${isRead ? 'text-emerald-500' : 'text-amber-500'}">${isRead ? '✓' : '●'}</span>
-                    <div>
-                        <h4 class="font-extrabold text-base mb-1">${title}</h4>
-                        <p class="text-xs text-gray-500">${isRead ? '읽음' : '안읽음'}</p>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
+        list.innerHTML = statusSummary(items, 'journal') + renderSortedItems(items, 'journal');
     } catch (e) {
         list.innerHTML = '<div class="card text-center text-gray-500 py-12">journal/ 폴더를 찾을 수 없습니다.</div>';
     }
