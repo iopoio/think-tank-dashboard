@@ -451,13 +451,29 @@ function parseFrontmatter(text) {
 }
 
 // 확신도 점수 파싱 (🟢+1 🟡0 🔴-1, 6단계 검증 기반)
+// 실제 형식: "→ 🟢2 🟡3 🔴0 → 총점: 2점" 또는 이모지 개별 나열
 function parseConfidence(text) {
+    // 형식1: 🟢2 🟡3 🔴0 (숫자 붙은 형태)
+    const fmt1Green = text.match(/🟢(\d+)/);
+    const fmt1Yellow = text.match(/🟡(\d+)/);
+    const fmt1Red = text.match(/🔴(\d+)/);
+
+    if (fmt1Green || fmt1Yellow || fmt1Red) {
+        const green = fmt1Green ? parseInt(fmt1Green[1]) : 0;
+        const yellow = fmt1Yellow ? parseInt(fmt1Yellow[1]) : 0;
+        const red = fmt1Red ? parseInt(fmt1Red[1]) : 0;
+        // 총점이 명시되어 있으면 그걸 사용
+        const totalMatch = text.match(/총점[:\s]*(-?\d+)/);
+        const total = totalMatch ? parseInt(totalMatch[1]) : (green - red);
+        return { green, yellow, red, total };
+    }
+
+    // 형식2: 🟢 🟢 🟡 (이모지 개별 나열)
     const green = (text.match(/🟢/g) || []).length;
     const yellow = (text.match(/🟡/g) || []).length;
     const red = (text.match(/🔴/g) || []).length;
-    const total = green - red;
-    if (green + yellow + red === 0) return null; // 확신도 정보 없음
-    return { green, yellow, red, total };
+    if (green + yellow + red === 0) return null;
+    return { green, yellow, red, total: green - red };
 }
 
 function confidenceBadge(conf) {
@@ -473,7 +489,7 @@ function classifyItem(meta, content) {
     const text = content.toLowerCase();
 
     // Think 시스템 공식 태그 기준 (Think 클과장 확인 완료)
-    const domainTags = ['AI', 'ai', '투자', '효율화', '인테리어'];
+    const domainTags = ['AI', 'ai', '투자', '효율화', '인테리어', '기타'];
     const ideaTags = ['아이디어', '구상', 'idea'];
     const journalTags = ['회고', '일기', '리뷰', 'journal', 'review'];
     const todoKeywords = ['해야', '할일', '예정', '마감', '기한', 'todo', '공모전', '신청'];
