@@ -431,78 +431,281 @@ async function loadLiveData() {
     }
 }
 
+// --- Frontmatter 파싱 ---
+function parseFrontmatter(text) {
+    const match = text.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (!match) return {};
+    const meta = {};
+    match[1].split('\n').forEach(line => {
+        const m = line.match(/^(\w+):\s*(.+)/);
+        if (m) {
+            let val = m[2].trim();
+            // [태그1, 태그2] 형태 파싱
+            if (val.startsWith('[') && val.endsWith(']')) {
+                val = val.slice(1, -1).split(',').map(s => s.trim());
+            }
+            meta[m[1]] = val;
+        }
+    });
+    return meta;
+}
+
+// --- 자동 분류 로직 ---
+function classifyItem(meta, content) {
+    const tags = Array.isArray(meta.tags) ? meta.tags : (meta.tags ? [meta.tags] : []);
+    const text = content.toLowerCase();
+
+    // 태그 기반 도메인 매핑
+    const domainTags = ['투자', 'AI', 'ai', '건강', '철학', '기술', '경제', '심리', '과학', '비즈니스', '마케팅', '디자인'];
+    const ideaTags = ['아이디어', '구상', 'idea'];
+    const journalTags = ['회고', '일기', '리뷰', 'journal', 'review'];
+    const todoKeywords = ['해야', '할일', '예정', '마감', '기한', 'todo', '공모전', '신청'];
+
+    // 태그 매칭
+    for (const t of tags) {
+        const tLower = t.toLowerCase();
+        if (ideaTags.some(k => tLower.includes(k))) return { target: 'ideas', reason: `태그: ${t}` };
+        if (journalTags.some(k => tLower.includes(k))) return { target: 'journal', reason: `태그: ${t}` };
+        if (domainTags.some(k => tLower === k.toLowerCase())) return { target: 'domains', subfolder: t, reason: `태그: ${t}` };
+    }
+
+    // 내용 키워드 매칭
+    if (todoKeywords.some(k => text.includes(k))) return { target: 'todo', reason: '내용에 할일 키워드' };
+
+    // 파일명에서 힌트
+    const nameLower = (meta._filename || '').toLowerCase();
+    if (nameLower.includes('회고') || nameLower.includes('journal')) return { target: 'journal', reason: '파일명' };
+    if (nameLower.includes('idea') || nameLower.includes('아이디어')) return { target: 'ideas', reason: '파일명' };
+
+    // 태그가 있으면 도메인으로
+    if (tags.length > 0) return { target: 'domains', subfolder: tags[0], reason: `태그: ${tags[0]}` };
+
+    // 기본값
+    return { target: 'domains', subfolder: '미분류', reason: '자동 기본값' };
+}
+
+const CLASSIFY_ICONS = {
+    ideas: '💡', domains: '📚', journal: '📝', todo: '📌',
+};
+const CLASSIFY_LABELS = {
+    ideas: '아이디어', domains: '도메인', journal: '회고', todo: '할일',
+};
+
+// --- Inbox 로드 (파일 내용까지 읽어서 자동 분류) ---
 async function loadInboxFromGitHub() {
     const list = document.getElementById('inbox-list');
-    list.innerHTML = '<div class="card animate-pulse h-32"></div>';
+    list.innerHTML = '<div class="card animate-pulse h-32"></div><div class="card animate-pulse h-32"></div>';
 
     try {
         const files = await ghApi.get(ghApi.repoUrl('inbox/'));
         const items = files.filter(f => f.type === 'file');
 
-        STATE.inbox = items;
-        ['inbox-badge', 'inbox-badge-mobile'].forEach(id => {
-            const b = document.getElementById(id);
-            if (!b) return;
-            b.textContent = items.length;
-            b.classList.toggle('hidden', items.length === 0);
-        });
+        // 각 파일 내용 읽기 + 분류
+        const enriched = await Promise.all(items.map(async (item) => {
+            try {
+                const fileData = await ghApi.get(item.url);
+                const raw = atob(fileData.content);
+                const decoded = new TextDecoder('utf-8').decode(
+                    Uint8Array.from(raw, c => c.charCodeAt(0))
+                );
+                const meta = parseFrontmatter(decoded);
+                meta._filename = item.name;
+                const classification = classifyItem(meta, decoded);
+                return { ...item, fileData, decoded, meta, classification };
+            } catch {
+                return { ...item, fileData: null, decoded: '', meta: {}, classification: { target: 'domains', subfolder: '미분류', reason: '로드 실패' } };
+            }
+        }));
 
-        if (items.length === 0) {
+        STATE.inbox = enriched;
+        updateInboxBadge(enriched.length);
+
+        if (enriched.length === 0) {
             list.innerHTML = '<div class="card text-center text-gray-500 py-12">🎉 Inbox가 비어있습니다!</div>';
             return;
         }
 
-        list.innerHTML = items.map((item, i) => `
-            <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
-                <div class="flex items-center gap-4 mb-3">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-lg">📄</div>
-                    <div class="flex-1 min-w-0">
-                        <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm truncate">${item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ')}</h4>
-                        <div class="text-xs text-gray-500">inbox/${item.name}</div>
-                    </div>
-                </div>
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="event.stopPropagation(); inboxSort('ideas', ${i})" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">💡 아이디어</button>
-                    <button onclick="event.stopPropagation(); inboxSort('domains', ${i})" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">📚 도메인</button>
-                    <button onclick="event.stopPropagation(); inboxSort('journal', ${i})" class="sort-btn text-violet-600 bg-violet-50 dark:bg-violet-900/20">📝 회고</button>
-                    <button onclick="event.stopPropagation(); inboxSort('todo', ${i})" class="sort-btn text-orange-600 bg-orange-50 dark:bg-orange-900/20">📌 할일</button>
-                    <button onclick="event.stopPropagation(); inboxSort('pass', ${i})" class="sort-btn text-gray-500 bg-gray-100 dark:bg-gray-800">⏭️ 패스</button>
-                </div>
+        // 전체 분류 실행 버튼
+        let html = `
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm text-gray-500">${enriched.length}개 항목 자동 분류됨</p>
+                <button onclick="executeAllClassify()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all">전체 분류 실행</button>
             </div>
-        `).join('');
+        `;
+
+        html += enriched.map((item, i) => {
+            const c = item.classification;
+            const icon = CLASSIFY_ICONS[c.target] || '📄';
+            const label = CLASSIFY_LABELS[c.target] || c.target;
+            const sub = c.subfolder ? ` / ${c.subfolder}` : '';
+            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+
+            return `
+            <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
+                <div class="flex items-center gap-3 mb-2">
+                    <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm flex-1 truncate">${title}</h4>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="sort-btn ${c.target === 'ideas' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : c.target === 'journal' ? 'text-violet-600 bg-violet-50 dark:bg-violet-900/20' : c.target === 'todo' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' : 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'}">${icon} ${label}${sub}</span>
+                    <span class="text-[10px] text-gray-400">${c.reason}</span>
+                </div>
+                <div class="flex gap-1.5 mt-3 flex-wrap">
+                    <button onclick="event.stopPropagation(); reclassify(${i}, 'ideas')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'ideas' ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">💡</button>
+                    <button onclick="event.stopPropagation(); reclassify(${i}, 'domains')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'domains' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📚</button>
+                    <button onclick="event.stopPropagation(); reclassify(${i}, 'journal')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'journal' ? 'bg-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📝</button>
+                    <button onclick="event.stopPropagation(); reclassify(${i}, 'todo')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'todo' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📌</button>
+                    <button onclick="event.stopPropagation(); reclassify(${i}, 'pass')" class="text-[10px] px-2 py-1 rounded-lg text-gray-400 bg-gray-100 dark:bg-gray-800">✕</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        list.innerHTML = html;
     } catch (e) {
         list.innerHTML = '<div class="card text-center text-gray-500 py-12">inbox/ 폴더를 찾을 수 없습니다.</div>';
     }
 }
 
+function updateInboxBadge(count) {
+    ['inbox-badge', 'inbox-badge-mobile'].forEach(id => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.textContent = count;
+        b.classList.toggle('hidden', count === 0);
+    });
+}
+
+// 수동으로 분류 변경
+function reclassify(index, newTarget) {
+    const item = STATE.inbox[index];
+    if (!item) return;
+    item.classification = { target: newTarget, reason: '수동 변경' };
+    if (newTarget === 'domains' && item.meta && item.meta.tags) {
+        const tags = Array.isArray(item.meta.tags) ? item.meta.tags : [item.meta.tags];
+        if (tags.length > 0) item.classification.subfolder = tags[0];
+    }
+    // UI 재렌더링
+    renderInboxList();
+}
+
+function renderInboxList() {
+    const enriched = STATE.inbox;
+    const list = document.getElementById('inbox-list');
+
+    let html = `
+        <div class="flex items-center justify-between mb-4">
+            <p class="text-sm text-gray-500">${enriched.length}개 항목</p>
+            <button onclick="executeAllClassify()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all">전체 분류 실행</button>
+        </div>
+    `;
+
+    html += enriched.map((item, i) => {
+        const c = item.classification;
+        const icon = CLASSIFY_ICONS[c.target] || '📄';
+        const label = CLASSIFY_LABELS[c.target] || c.target;
+        const sub = c.subfolder ? ` / ${c.subfolder}` : '';
+        const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+
+        return `
+        <div class="card cursor-pointer hover:bg-indigo-50/10 active:scale-[0.99] transition-all" onclick="openInboxItem(${i})">
+            <div class="flex items-center gap-3 mb-2">
+                <h4 class="font-bold text-gray-800 dark:text-gray-100 text-sm flex-1 truncate">${title}</h4>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="sort-btn ${c.target === 'ideas' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : c.target === 'journal' ? 'text-violet-600 bg-violet-50 dark:bg-violet-900/20' : c.target === 'todo' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' : 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'}">${icon} ${label}${sub}</span>
+                <span class="text-[10px] text-gray-400">${c.reason}</span>
+            </div>
+            <div class="flex gap-1.5 mt-3 flex-wrap">
+                <button onclick="event.stopPropagation(); reclassify(${i}, 'ideas')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'ideas' ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">💡</button>
+                <button onclick="event.stopPropagation(); reclassify(${i}, 'domains')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'domains' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📚</button>
+                <button onclick="event.stopPropagation(); reclassify(${i}, 'journal')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'journal' ? 'bg-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📝</button>
+                <button onclick="event.stopPropagation(); reclassify(${i}, 'todo')" class="text-[10px] px-2 py-1 rounded-lg ${c.target === 'todo' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}">📌</button>
+                <button onclick="event.stopPropagation(); reclassify(${i}, 'pass')" class="text-[10px] px-2 py-1 rounded-lg text-gray-400 bg-gray-100 dark:bg-gray-800">✕</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    list.innerHTML = html;
+}
+
+// --- 전체 분류 실행 ---
+async function executeAllClassify() {
+    const items = STATE.inbox.filter(item => item.fileData);
+    if (items.length === 0) return;
+
+    const summary = items.map(item => {
+        const c = item.classification;
+        const label = CLASSIFY_LABELS[c.target] || c.target;
+        const sub = c.subfolder ? `/${c.subfolder}` : '';
+        return `• ${item.name.replace(/\.md$/i, '')} → ${label}${sub}`;
+    }).join('\n');
+
+    if (!confirm(`${items.length}개 항목을 분류합니다:\n\n${summary}\n\n진행하시겠습니까?`)) return;
+
+    let success = 0;
+    let fail = 0;
+
+    for (const item of items) {
+        try {
+            const c = item.classification;
+
+            if (c.target === 'todo') {
+                const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+                todos.items.unshift({
+                    id: Date.now() + Math.random(),
+                    text: title,
+                    done: false,
+                    createdAt: new Date().toISOString(),
+                });
+                todos.save();
+                await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+
+            } else if (c.target === 'pass') {
+                await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+
+            } else {
+                // ideas/, domains/{subfolder}/, journal/ 로 이동
+                const folder = c.subfolder ? `${c.target}/${c.subfolder}` : c.target;
+                await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), {
+                    message: `[dashboard] 자동 분류: ${item.name} → ${folder}/`,
+                    content: item.fileData.content,
+                });
+                await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+            }
+            success++;
+        } catch (e) {
+            console.error(`분류 실패: ${item.name}`, e);
+            fail++;
+        }
+    }
+
+    todos.updateBadge();
+    alert(`분류 완료: ${success}건 성공${fail > 0 ? ', ' + fail + '건 실패' : ''}`);
+    await loadInboxFromGitHub();
+}
+
+// --- Inbox 아이템 상세 보기 ---
 async function openInboxItem(index) {
     const item = STATE.inbox[index];
     if (!item) return;
 
-    try {
-        const fileData = await ghApi.get(item.url);
-        const content = atob(fileData.content);
-        const decoded = new TextDecoder('utf-8').decode(
-            Uint8Array.from(content, c => c.charCodeAt(0))
-        );
+    const c = item.classification;
+    const icon = CLASSIFY_ICONS[c.target] || '📄';
+    const label = CLASSIFY_LABELS[c.target] || c.target;
+    const sub = c.subfolder ? ` / ${c.subfolder}` : '';
 
-        const sortButtons = `
-            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">분류하기</p>
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="inboxSort('ideas', ${index})" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">💡 아이디어</button>
-                    <button onclick="inboxSort('domains', ${index})" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">📚 도메인</button>
-                    <button onclick="inboxSort('journal', ${index})" class="sort-btn text-violet-600 bg-violet-50 dark:bg-violet-900/20">📝 회고</button>
-                    <button onclick="inboxSort('todo', ${index})" class="sort-btn text-orange-600 bg-orange-50 dark:bg-orange-900/20">📌 할일</button>
-                    <button onclick="inboxSort('pass', ${index})" class="sort-btn text-gray-500 bg-gray-100 dark:bg-gray-800">⏭️ 패스</button>
-                </div>
+    const classifyInfo = `
+        <div class="mb-6 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-bold">${icon} ${label}${sub}(으)로 분류됨</span>
+                <span class="text-[10px] text-gray-400">${c.reason}</span>
             </div>
-        `;
+        </div>
+    `;
 
-        openModal(item.name.replace(/\.md$/i, ''), simpleMarkdown(decoded) + sortButtons);
-    } catch (e) {
-        alert('파일 로드 실패: ' + e.message);
-    }
+    openModal(
+        item.name.replace(/\.md$/i, ''),
+        classifyInfo + simpleMarkdown(item.decoded || '')
+    );
 }
 
 function simpleMarkdown(text) {
@@ -516,59 +719,6 @@ function simpleMarkdown(text) {
         .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
         .replace(/\n\n/g, '<br><br>')
         .replace(/\n/g, '<br>');
-}
-
-async function inboxSort(target, index) {
-    const item = STATE.inbox[index];
-    if (!item) return;
-
-    const labels = {
-        ideas: '💡 아이디어',
-        domains: '📚 도메인',
-        journal: '📝 회고',
-        todo: '📌 할일',
-        pass: '⏭️ 패스 (삭제)',
-    };
-
-    if (!confirm(`"${item.name.replace(/\.md$/i, '')}"을(를)\n${labels[target]}(으)로 보내시겠습니까?`)) return;
-
-    try {
-        const fileData = await ghApi.get(item.url);
-
-        if (target === 'todo') {
-            // 할일은 localStorage에 추가 + inbox에서 삭제
-            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
-            todos.items.unshift({
-                id: Date.now(),
-                text: title,
-                done: false,
-                createdAt: new Date().toISOString(),
-            });
-            todos.save();
-            todos.updateBadge();
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
-
-        } else if (target === 'pass') {
-            // 삭제
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
-
-        } else {
-            // ideas/, domains/, journal/ 로 이동
-            await ghApi.put(ghApi.repoUrl(`${target}/${item.name}`), {
-                message: `[dashboard] 분류: ${item.name} → ${target}/`,
-                content: fileData.content,
-            });
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), fileData.sha);
-        }
-
-        // 모달 닫기 + 새로고침
-        document.getElementById('content-modal').style.display = 'none';
-        document.body.classList.remove('modal-open');
-        await loadInboxFromGitHub();
-
-    } catch (e) {
-        alert('처리 실패: ' + e.message);
-    }
 }
 
 async function loadIdeasFromGitHub() {
