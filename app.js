@@ -150,6 +150,7 @@ function bootApp() {
         renderJournal();
     }
     updateStatsUI();
+    updateStats();
     todos.updateBadge();
 }
 
@@ -723,8 +724,141 @@ function simpleMarkdown(text) {
         .replace(/\n/g, '<br>');
 }
 
+// --- 읽음/안읽음 관리 (localStorage) ---
+const readStatus = {
+    _key: 'tt_read_items',
+    _data: null,
+
+    getData() {
+        if (!this._data) this._data = JSON.parse(localStorage.getItem(this._key) || '{}');
+        return this._data;
+    },
+
+    isRead(path) {
+        return !!this.getData()[path];
+    },
+
+    markRead(path) {
+        const d = this.getData();
+        d[path] = new Date().toISOString();
+        localStorage.setItem(this._key, JSON.stringify(d));
+    },
+
+    unmark(path) {
+        const d = this.getData();
+        delete d[path];
+        localStorage.setItem(this._key, JSON.stringify(d));
+    },
+
+    countUnread(paths) {
+        return paths.filter(p => !this.isRead(p)).length;
+    }
+};
+
+// --- 공통 아이템 뷰어 (모달 + 읽음 표시 + 액션 버튼) ---
+async function openItemViewer(url, path, title, section) {
+    openModal(title, '<div class="text-center text-gray-500 py-8">불러오는 중...</div>');
+
+    try {
+        const fileData = await ghApi.get(url);
+        const raw = atob(fileData.content);
+        const decoded = new TextDecoder('utf-8').decode(
+            Uint8Array.from(raw, c => c.charCodeAt(0))
+        );
+
+        // 읽음 표시
+        readStatus.markRead(path);
+
+        const actions = `
+            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">액션</p>
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="itemAction('develop', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">🚀 발전시키기</button>
+                    <button onclick="itemAction('later', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">⏳ 나중으로</button>
+                    <button onclick="itemAction('delete', '${path}', '${encodeURIComponent(title)}')" class="sort-btn text-red-500 bg-red-50 dark:bg-red-900/20">🗑️ 삭제</button>
+                </div>
+            </div>
+        `;
+
+        openModal(title, simpleMarkdown(decoded) + actions);
+
+        // 목록 UI에서 읽음 반영
+        refreshCurrentTab();
+    } catch (e) {
+        openModal(title, '<div class="text-center text-red-400 py-8">로드 실패</div>');
+    }
+}
+
+async function itemAction(action, path, encodedTitle) {
+    const title = decodeURIComponent(encodedTitle);
+
+    if (action === 'develop') {
+        const note = prompt(`"${title}" 발전시키기\n\n추가할 메모나 아이디어를 적어주세요:`);
+        if (note === null) return;
+        // 할일에 추가 + 메모
+        todos.items.unshift({
+            id: Date.now(),
+            text: `🚀 ${title}: ${note || '발전시키기'}`,
+            done: false,
+            createdAt: new Date().toISOString(),
+        });
+        todos.save();
+        todos.updateBadge();
+        alert('할일에 추가됨!');
+
+    } else if (action === 'later') {
+        readStatus.unmark(path); // 안읽음으로 되돌림
+        alert('나중으로 미뤘습니다. (안읽음 상태로 복원)');
+
+    } else if (action === 'delete') {
+        if (!confirm(`"${title}"을(를) 삭제하시겠습니까?`)) return;
+        try {
+            const fileData = await ghApi.get(ghApi.repoUrl(path));
+            await ghApi.delete(ghApi.repoUrl(path), fileData.sha);
+            alert('삭제 완료');
+            document.getElementById('content-modal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            refreshCurrentTab();
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
+        }
+        return;
+    }
+
+    document.getElementById('content-modal').style.display = 'none';
+    document.body.classList.remove('modal-open');
+    refreshCurrentTab();
+}
+
+function refreshCurrentTab() {
+    switch (STATE.activeTab) {
+        case 'ideas': loadIdeasFromGitHub(); break;
+        case 'domains': loadDomainsFromGitHub(); break;
+        case 'journal': loadJournalFromGitHub(); break;
+        case 'inbox': loadInboxFromGitHub(); break;
+    }
+    updateStats();
+}
+
+// --- 통계 업데이트 ---
+function updateStats() {
+    const data = readStatus.getData();
+    const readCount = Object.keys(data).length;
+    const todoCount = todos.items.filter(t => !t.done).length;
+    const doneCount = todos.items.filter(t => t.done).length;
+
+    const el = (id) => document.getElementById(id);
+    if (el('stat-total-intake')) el('stat-total-intake').textContent = readCount;
+    if (el('stat-execution-rate')) {
+        const total = todoCount + doneCount;
+        el('stat-execution-rate').textContent = total > 0 ? Math.round(doneCount / total * 100) + '%' : '0%';
+    }
+}
+
+// --- Ideas 로드 ---
 async function loadIdeasFromGitHub() {
     const list = document.getElementById('ideas-list');
+    list.innerHTML = '<div class="card animate-pulse h-24"></div>';
     try {
         const files = await ghApi.get(ghApi.repoUrl('ideas/'));
         const items = files.filter(f => f.type === 'file');
@@ -732,41 +866,93 @@ async function loadIdeasFromGitHub() {
             list.innerHTML = '<div class="card text-center text-gray-500 py-12">아이디어가 없습니다.</div>';
             return;
         }
-        list.innerHTML = items.map(item => `
-            <div class="card group hover:-translate-y-1 transition-all cursor-pointer">
-                <h4 class="font-extrabold text-lg mb-2">${item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ')}</h4>
-                <p class="text-sm text-gray-500">ideas/${item.name}</p>
-            </div>
-        `).join('');
+        const unread = readStatus.countUnread(items.map(f => `ideas/${f.name}`));
+        let html = unread > 0 ? `<p class="text-sm text-amber-500 font-bold mb-4">${unread}건 안읽음</p>` : '';
+        html += items.map(item => {
+            const path = `ideas/${item.name}`;
+            const isRead = readStatus.isRead(path);
+            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+            return `
+            <div class="card cursor-pointer hover:-translate-y-1 transition-all ${isRead ? 'opacity-60' : ''}" onclick="openItemViewer('${item.url}', '${path}', '${title}', 'ideas')">
+                <div class="flex items-center gap-3">
+                    <span class="${isRead ? 'text-emerald-500' : 'text-amber-500'}">${isRead ? '✓' : '●'}</span>
+                    <div>
+                        <h4 class="font-extrabold text-base mb-1">${title}</h4>
+                        <p class="text-xs text-gray-500">${isRead ? '읽음' : '안읽음'}</p>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+        list.innerHTML = html;
     } catch (e) {
         list.innerHTML = '<div class="card text-center text-gray-500 py-12">ideas/ 폴더를 찾을 수 없습니다.</div>';
     }
 }
 
+// --- Domains 로드 (분류별 보기) ---
 async function loadDomainsFromGitHub() {
     const container = document.getElementById('domains-grid');
+    container.innerHTML = '<div class="card animate-pulse h-32 col-span-full"></div>';
     try {
-        const items = await ghApi.get(ghApi.repoUrl('domains/'));
-        const colors = ['from-amber-400 to-orange-500', 'from-indigo-400 to-indigo-600', 'from-emerald-400 to-teal-600', 'from-violet-400 to-purple-600', 'from-pink-400 to-rose-600'];
-        const icons = ['📁', '🤖', '💰', '🧬', '🏛️', '📚'];
+        const folders = await ghApi.get(ghApi.repoUrl('domains/'));
+        const domainIcons = { 'AI': '🤖', '투자': '💰', '효율화': '⚡', '인테리어': '🏠', '기타': '📦', '미분류': '📄' };
+        const domainColors = { 'AI': 'from-indigo-400 to-indigo-600', '투자': 'from-amber-400 to-orange-500', '효율화': 'from-emerald-400 to-teal-600', '인테리어': 'from-pink-400 to-rose-500', '기타': 'from-gray-400 to-gray-500' };
 
-        container.innerHTML = items.map((item, i) => `
-            <div class="card !p-0 overflow-hidden group cursor-pointer">
-                <div class="bg-gradient-to-r ${colors[i % colors.length]} h-2"></div>
-                <div class="p-8">
-                    <div class="text-3xl mb-4">${item.type === 'dir' ? icons[i % icons.length] : '📄'}</div>
-                    <h4 class="text-xl font-black font-outfit mb-1">${item.name.replace(/[-_]/g, ' ')}</h4>
-                    <p class="text-sm text-gray-500">${item.type === 'dir' ? 'Folder' : 'File'}</p>
-                </div>
-            </div>
-        `).join('');
+        // 각 폴더의 파일 목록 로드
+        let allHtml = '';
+        for (const folder of folders) {
+            if (folder.type !== 'dir') continue;
+            const icon = domainIcons[folder.name] || '📁';
+            const color = domainColors[folder.name] || 'from-violet-400 to-purple-600';
+
+            try {
+                const files = await ghApi.get(folder.url);
+                const items = files.filter(f => f.type === 'file');
+                const unread = readStatus.countUnread(items.map(f => `domains/${folder.name}/${f.name}`));
+
+                allHtml += `
+                <div class="col-span-full">
+                    <div class="flex items-center gap-3 mb-4 mt-6">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center text-xl text-white">${icon}</div>
+                        <div>
+                            <h3 class="font-extrabold text-lg font-outfit">${folder.name}</h3>
+                            <p class="text-xs text-gray-500">${items.length}건${unread > 0 ? ` · <span class="text-amber-500 font-bold">${unread}건 안읽음</span>` : ''}</p>
+                        </div>
+                    </div>
+                </div>`;
+
+                if (items.length === 0) {
+                    allHtml += '<div class="col-span-full text-sm text-gray-500 pl-14 mb-4">비어있음</div>';
+                } else {
+                    allHtml += items.map(item => {
+                        const path = `domains/${folder.name}/${item.name}`;
+                        const isRead = readStatus.isRead(path);
+                        const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+                        return `
+                        <div class="card cursor-pointer hover:-translate-y-1 transition-all ${isRead ? 'opacity-60' : ''}" onclick="openItemViewer('${item.url}', '${path}', '${title}', 'domains')">
+                            <div class="flex items-center gap-3">
+                                <span class="${isRead ? 'text-emerald-500' : 'text-amber-500'}">${isRead ? '✓' : '●'}</span>
+                                <div>
+                                    <h4 class="font-bold text-sm mb-1">${title}</h4>
+                                    <p class="text-xs text-gray-500">${isRead ? '읽음' : '안읽음'}</p>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+            } catch { /* 빈 폴더 무시 */ }
+        }
+
+        container.innerHTML = allHtml || '<div class="card text-center text-gray-500 py-12 col-span-full">도메인이 없습니다.</div>';
     } catch (e) {
         container.innerHTML = '<div class="card text-center text-gray-500 py-12 col-span-full">domains/ 폴더를 찾을 수 없습니다.</div>';
     }
 }
 
+// --- Journal 로드 ---
 async function loadJournalFromGitHub() {
     const list = document.getElementById('journal-list');
+    list.innerHTML = '<div class="card animate-pulse h-24"></div>';
     try {
         const files = await ghApi.get(ghApi.repoUrl('journal/'));
         const items = files.filter(f => f.type === 'file').reverse();
@@ -774,18 +960,21 @@ async function loadJournalFromGitHub() {
             list.innerHTML = '<div class="card text-center text-gray-500 py-12">회고가 없습니다.</div>';
             return;
         }
-        list.innerHTML = items.map(item => `
-            <div class="flex gap-6 group">
-                <div class="hidden md:flex flex-col items-center">
-                    <div class="w-4 h-4 rounded-full border-4 border-indigo-500 bg-white dark:bg-dark-950 z-10"></div>
-                    <div class="w-0.5 h-full bg-gray-100 dark:bg-dark-800 -mt-1 group-last:hidden"></div>
+        list.innerHTML = items.map(item => {
+            const path = `journal/${item.name}`;
+            const isRead = readStatus.isRead(path);
+            const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+            return `
+            <div class="card cursor-pointer hover:translate-x-1 transition-transform ${isRead ? 'opacity-60' : ''}" onclick="openItemViewer('${item.url}', '${path}', '${title}', 'journal')">
+                <div class="flex items-center gap-3">
+                    <span class="${isRead ? 'text-emerald-500' : 'text-amber-500'}">${isRead ? '✓' : '●'}</span>
+                    <div>
+                        <h4 class="font-extrabold text-base mb-1">${title}</h4>
+                        <p class="text-xs text-gray-500">${isRead ? '읽음' : '안읽음'}</p>
+                    </div>
                 </div>
-                <div class="card flex-grow !p-8 hover:translate-x-1 transition-transform">
-                    <h4 class="text-xl font-extrabold mb-3">${item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ')}</h4>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm">journal/${item.name}</p>
-                </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     } catch (e) {
         list.innerHTML = '<div class="card text-center text-gray-500 py-12">journal/ 폴더를 찾을 수 없습니다.</div>';
     }
