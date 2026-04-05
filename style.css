@@ -1,43 +1,23 @@
-/* Custom Premium Transitions & Aesthetics */
+/* Think Tank Dashboard - style.css */
 
 :root {
     --primary: #6366f1;
-    --primary-hover: #4f46e5;
-    --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-* {
-    transition: background-color 0.3s var(--transition-smooth), border-color 0.3s var(--transition-smooth);
-}
-
+/* 탭 전환 애니메이션 */
 .tab-pane {
-    animation: fadeIn 0.4s var(--transition-smooth);
+    animation: fadeIn 0.3s ease-out;
 }
-
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Glassmorphism utility */
-.glass-effect {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.dark .glass-effect {
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Custom Active Indicator */
+/* 사이드바 활성 표시 */
 .nav-item.active {
     position: relative;
     overflow: hidden;
 }
-
 .nav-item.active::after {
     content: '';
     position: absolute;
@@ -50,39 +30,29 @@
     border-radius: 0 4px 4px 0;
 }
 
-/* Modal Open State */
+/* 모달 */
 body.modal-open {
     overflow: hidden;
 }
 
-#content-modal.show {
-    opacity: 1;
-    pointer-events: auto;
+/* 카드 호버 */
+.card {
+    transition: box-shadow 0.2s, transform 0.15s;
 }
-
-#content-modal.show > div {
-    transform: scale(1);
-    opacity: 1;
-}
-
-/* Card Hover micro-animations */
 .card:hover {
     box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.1);
 }
-
 .dark .card:hover {
     box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
 }
 
-/* 할일 필터 버튼 */
+/* 할일 필터 */
 .todo-filter {
     background: transparent;
     color: #94a3b8;
     border: 1px solid transparent;
 }
-.todo-filter:hover {
-    color: #6366f1;
-}
+.todo-filter:hover { color: #6366f1; }
 .todo-filter.active {
     background: #6366f1;
     color: white;
@@ -95,12 +65,9 @@ body.modal-open {
     border-radius: 10px;
     font-size: 12px;
     font-weight: 600;
-    transition: transform 0.1s, opacity 0.15s;
     -webkit-tap-highlight-color: transparent;
 }
-.sort-btn:active {
-    transform: scale(0.94);
-}
+.sort-btn:active { transform: scale(0.94); }
 
 /* 모바일 하단 탭바 */
 .mobile-tab {
@@ -115,12 +82,8 @@ body.modal-open {
     transition: color 0.2s;
     -webkit-tap-highlight-color: transparent;
 }
-.mobile-tab.active {
-    color: #6366f1;
-}
-.mobile-tab:active {
-    transform: scale(0.92);
-}
+.mobile-tab.active { color: #6366f1; }
+.mobile-tab:active { transform: scale(0.92); }
 
 /* iOS safe area */
 .safe-bottom {

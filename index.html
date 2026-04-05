@@ -7,7 +7,7 @@
     <!-- Google Fonts: Inter & Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
     <!-- Tailwind CSS (via CDN for simplicity, can be replaced with custom CSS later) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Custom Tailwind Configuration -->
@@ -17,7 +17,7 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
                         outfit: ['Outfit', 'sans-serif'],
                     },
                     colors: {
@@ -56,7 +56,7 @@
         }
         
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
         .font-outfit {
@@ -144,9 +144,7 @@
 
             <!-- Footer User Info -->
             <div id="user-info" class="mt-auto pt-6 flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
-                    <img id="user-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky" alt="User">
-                </div>
+                <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-sm">🌶️</div>
                 <div class="flex-grow min-w-0">
                     <p class="text-sm font-semibold truncate leading-none mb-1">후추님</p>
                     <p class="text-xs text-gray-500 truncate leading-none">Think Tank 관리자</p>
@@ -174,20 +172,21 @@
 
         <!-- Main Content Area -->
         <main class="flex-1 min-h-0 overflow-y-auto bg-gray-50/50 dark:bg-dark-950 p-4 pb-24 md:pb-10 md:p-10">
-            <!-- Header/Search -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-                <div class="relative w-full max-w-xl group">
-                    <input type="search" id="global-search" placeholder="인사이트, 아이디어, 파일 검색..." class="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200/60 dark:border-gray-800 bg-white/80 dark:bg-dark-900/80 backdrop-blur-sm shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xl text-gray-400 group-focus-within:text-indigo-500 transition-colors">🔍</span>
+            <!-- Header/Search (데스크톱만 전체, 모바일은 축소) -->
+            <div class="flex items-center justify-between gap-3 mb-6 md:mb-12">
+                <div class="relative flex-1 max-w-xl group">
+                    <input type="search" id="global-search" placeholder="검색..." class="w-full pl-10 pr-4 py-2.5 md:py-3.5 md:pl-12 rounded-xl md:rounded-2xl border border-gray-200/60 dark:border-gray-800 bg-white/80 dark:bg-dark-900/80 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all">
+                    <span class="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-lg text-gray-400">🔍</span>
                 </div>
-                <div id="github-auth" class="flex gap-2">
-                    <button id="connect-github" class="px-5 py-3 rounded-2xl bg-dark-900 dark:bg-white text-white dark:text-dark-900 font-bold text-sm shadow-xl shadow-dark-900/10 dark:shadow-white/10 hover:opacity-90 transition-all flex items-center gap-2">
+                <div id="github-auth" class="hidden md:flex gap-2">
+                    <button id="connect-github" class="px-5 py-3 rounded-2xl bg-dark-900 dark:bg-white text-white dark:text-dark-900 font-bold text-sm hover:opacity-90 transition-all flex items-center gap-2">
                         <span>GitHub 연결</span>
                     </button>
-                    <button id="refresh-all" class="p-3 rounded-2xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-dark-700 transition-all">
+                    <button id="refresh-all" class="p-3 rounded-2xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all">
                         🔄
                     </button>
                 </div>
+                <button id="refresh-all-mobile" class="md:hidden p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-gray-700" onclick="ghApi.isConnected() ? loadLiveData() : alert('먼저 GitHub에 연결해주세요.')">🔄</button>
             </div>
 
             <!-- Tab Contents -->
@@ -196,8 +195,8 @@
                 <section id="tab-inbox" class="tab-pane">
                     <div class="flex items-end justify-between mb-8">
                         <div>
-                            <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">📥 Inbox</h2>
-                            <p class="text-gray-500 dark:text-gray-400">최신 인테이크와 인사이트를 확인하세요.</p>
+                            <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">📥 Inbox</h2>
+                            <p class="text-gray-500 dark:text-gray-400 hidden md:block">최신 인테이크와 인사이트를 확인하세요.</p>
                         </div>
                     </div>
                     <div id="inbox-list" class="grid grid-cols-1 gap-5">
@@ -211,8 +210,8 @@
                 <!-- Ideas Tab -->
                 <section id="tab-ideas" class="tab-pane hidden">
                     <div class="mb-8">
-                        <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">💡 Ideas</h2>
-                        <p class="text-gray-500 dark:text-gray-400">다음 아이디어를 포착하고 발전시키세요.</p>
+                        <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">💡 Ideas</h2>
+                        <p class="text-gray-500 dark:text-gray-400 hidden md:block">다음 아이디어를 포착하고 발전시키세요.</p>
                     </div>
                     <div id="ideas-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <!-- Ideas -->
@@ -222,8 +221,8 @@
                 <!-- Domains Tab -->
                 <section id="tab-domains" class="tab-pane hidden">
                     <div class="mb-8">
-                        <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">📚 Domains</h2>
-                        <p class="text-gray-500 dark:text-gray-400">분야별로 정리된 지식 베이스입니다.</p>
+                        <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">📚 Domains</h2>
+                        <p class="text-gray-500 dark:text-gray-400 hidden md:block">분야별로 정리된 지식 베이스입니다.</p>
                     </div>
                     <div id="domains-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         <!-- Domains -->
@@ -233,8 +232,8 @@
                 <!-- Journal Tab -->
                 <section id="tab-journal" class="tab-pane hidden">
                     <div class="mb-8">
-                        <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">📝 회고 (Journal)</h2>
-                        <p class="text-gray-500 dark:text-gray-400">주간 회고와 진행 기록입니다.</p>
+                        <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">📝 회고 (Journal)</h2>
+                        <p class="text-gray-500 dark:text-gray-400 hidden md:block">주간 회고와 진행 기록입니다.</p>
                     </div>
                     <div id="journal-list" class="space-y-8">
                         <!-- Journal -->
@@ -245,8 +244,8 @@
                 <section id="tab-todos" class="tab-pane hidden">
                     <div class="flex items-end justify-between mb-8">
                         <div>
-                            <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">📌 할일 (Todo)</h2>
-                            <p class="text-gray-500 dark:text-gray-400">나중에 해야 할 것들을 모아두세요.</p>
+                            <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">📌 할일 (Todo)</h2>
+                            <p class="text-gray-500 dark:text-gray-400 hidden md:block">나중에 해야 할 것들을 모아두세요.</p>
                         </div>
                     </div>
                     <!-- 할일 입력 -->
@@ -269,8 +268,8 @@
                 <!-- Statistics Tab -->
                 <section id="tab-stats" class="tab-pane hidden">
                     <div class="mb-8">
-                        <h2 class="text-4xl font-extrabold font-outfit mb-2 tracking-tight">📊 통계 (Statistics)</h2>
-                        <p class="text-gray-500 dark:text-gray-400">Think Tank의 데이터 기반 성과 지표입니다.</p>
+                        <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">📊 통계 (Statistics)</h2>
+                        <p class="text-gray-500 dark:text-gray-400 hidden md:block">Think Tank의 데이터 기반 성과 지표입니다.</p>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         <div class="lg:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6">

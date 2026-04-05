@@ -11,6 +11,7 @@ const STATE = {
     theme: localStorage.getItem('theme') || 'light',
     activeTab: 'inbox',
     inbox: [],
+    loaded: {},  // 탭별 로드 완료 플래그 (캐싱)
     reminders: [
         { text: '수요일 3시: Inbox 리뷰', icon: '📅', time: '매주 수 15:00' },
         { text: '목요일 저녁: 주간 회고', icon: '📝', time: '매주 목 20:00' },
@@ -361,9 +362,9 @@ async function itemAction(action, path, encodedTitle) {
 
 function refreshCurrentTab() {
     const tab = STATE.activeTab;
-    if (tab === 'ideas') loadIdeasFromGitHub();
-    else if (tab === 'domains') loadDomainsFromGitHub();
-    else if (tab === 'journal') loadJournalFromGitHub();
+    if (tab === 'ideas') loadIdeasFromGitHub(true);
+    else if (tab === 'domains') loadDomainsFromGitHub(true);
+    else if (tab === 'journal') loadJournalFromGitHub(true);
     else if (tab === 'inbox') loadInboxFromGitHub();
     updateStats();
 }
@@ -504,7 +505,8 @@ async function executeAllClassify() {
 // ============================================================
 // 9. Ideas / Domains / Journal 로드
 // ============================================================
-async function loadIdeasFromGitHub() {
+async function loadIdeasFromGitHub(force = false) {
+    if (!force && STATE.loaded.ideas) return;
     const list = document.getElementById('ideas-list');
     list.innerHTML = '<div class="card animate-pulse h-24"></div>';
     try {
@@ -512,10 +514,12 @@ async function loadIdeasFromGitHub() {
         const items = files.filter(f => f.type === 'file');
         if (items.length === 0) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">아이디어가 없습니다.</div>'; return; }
         list.innerHTML = statusSummary(items, 'ideas') + renderSortedItems(items, 'ideas');
+        STATE.loaded.ideas = true;
     } catch (e) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">ideas/ 폴더를 찾을 수 없습니다.</div>'; }
 }
 
-async function loadDomainsFromGitHub() {
+async function loadDomainsFromGitHub(force = false) {
+    if (!force && STATE.loaded.domains) return;
     const container = document.getElementById('domains-grid');
     container.innerHTML = '<div class="card animate-pulse h-32 col-span-full"></div>';
     const icons = { 'AI': '🤖', '투자': '💰', '효율화': '⚡', '인테리어': '🏠', '기타': '📦', '미분류': '📄' };
@@ -539,10 +543,12 @@ async function loadDomainsFromGitHub() {
             } catch { /* 빈 폴더 무시 */ }
         }
         container.innerHTML = html || '<div class="card text-center text-gray-500 py-12 col-span-full">도메인이 없습니다.</div>';
+        STATE.loaded.domains = true;
     } catch (e) { container.innerHTML = '<div class="card text-center text-gray-500 py-12 col-span-full">domains/ 폴더를 찾을 수 없습니다.</div>'; }
 }
 
-async function loadJournalFromGitHub() {
+async function loadJournalFromGitHub(force = false) {
+    if (!force && STATE.loaded.journal) return;
     const list = document.getElementById('journal-list');
     list.innerHTML = '<div class="card animate-pulse h-24"></div>';
     try {
@@ -550,6 +556,7 @@ async function loadJournalFromGitHub() {
         const items = files.filter(f => f.type === 'file').reverse();
         if (items.length === 0) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">회고가 없습니다.</div>'; return; }
         list.innerHTML = statusSummary(items, 'journal') + renderSortedItems(items, 'journal');
+        STATE.loaded.journal = true;
     } catch (e) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">journal/ 폴더를 찾을 수 없습니다.</div>'; }
 }
 
@@ -642,7 +649,8 @@ function updateAuthUI() {
 }
 
 async function loadLiveData() {
-    try { await Promise.all([loadInboxFromGitHub(), loadIdeasFromGitHub(), loadDomainsFromGitHub(), loadJournalFromGitHub()]); }
+    STATE.loaded = {}; // 캐시 초기화
+    try { await Promise.all([loadInboxFromGitHub(), loadIdeasFromGitHub(true), loadDomainsFromGitHub(true), loadJournalFromGitHub(true)]); }
     catch (e) { console.error('GitHub 데이터 로드 실패:', e); if (e.message.includes('401')) { alert('토큰이 만료되었거나 잘못되었습니다.'); ghApi.token = null; localStorage.removeItem('gh_token'); updateAuthUI(); } }
 }
 
