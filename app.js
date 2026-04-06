@@ -455,19 +455,111 @@ function reclassify(index, newTarget) {
     renderInboxList();
 }
 
+// 도메인 서브폴더 목록 (Think 공식 태그)
+const DOMAIN_SUBS = ['AI', '투자', '효율화', '인테리어', '기타'];
+
 async function openInboxItem(index) {
     const item = STATE.inbox[index]; if (!item) return;
+    STATE._reviewIndex = index; // 리뷰 모드용 현재 인덱스
     const c = item.classification;
     const icon = CLASSIFY_ICONS[c.target] || '📄';
     const label = CLASSIFY_LABELS[c.target] || c.target;
     const sub = c.subfolder ? ` / ${c.subfolder}` : '';
-    const info = `<div class="mb-6 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+    const total = STATE.inbox.length;
+    const confHtml = confidenceBadge(item.confidence);
+
+    // 네비게이션 (리뷰 모드)
+    const nav = `<div class="flex items-center justify-between mb-4">
+        <button onclick="reviewNav(-1)" class="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 ${index === 0 ? 'opacity-30 pointer-events-none' : ''}">← 이전</button>
+        <span class="text-xs text-gray-400">${index + 1} / ${total}</span>
+        <button onclick="reviewNav(1)" class="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 ${index >= total - 1 ? 'opacity-30 pointer-events-none' : ''}">다음 →</button>
+    </div>`;
+
+    // 자동 분류 정보
+    const info = `<div class="mb-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
-            <span class="text-sm font-bold">${icon} ${label}${sub}(으)로 분류됨</span>
+            <span class="text-sm font-bold">${icon} ${label}${sub}</span>
             <span class="text-[10px] text-gray-400">${c.reason}</span>
         </div>
+        ${confHtml ? '<div class="mt-2">' + confHtml + '</div>' : ''}
     </div>`;
-    openModal(item.name.replace(/\.md$/i, ''), info + simpleMarkdown(item.decoded || ''));
+
+    // 내용
+    const content = simpleMarkdown(item.decoded || '');
+
+    // 액션 버튼 (개별 리뷰)
+    const domainBtns = DOMAIN_SUBS.map(d =>
+        `<button onclick="inboxItemAction('domains', ${index}, '${d}')" class="sort-btn text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20">📚 ${d}</button>`
+    ).join('');
+
+    const actions = `
+        <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">분류하기</p>
+            <div class="flex gap-2 flex-wrap mb-3">
+                <button onclick="inboxItemAction('ideas', ${index})" class="sort-btn text-amber-600 bg-amber-50 dark:bg-amber-900/20">💡 아이디어</button>
+                ${domainBtns}
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="inboxItemAction('journal', ${index})" class="sort-btn text-violet-600 bg-violet-50 dark:bg-violet-900/20">📝 회고</button>
+                <button onclick="inboxItemAction('todo', ${index})" class="sort-btn text-orange-600 bg-orange-50 dark:bg-orange-900/20">📌 할일</button>
+                <button onclick="inboxItemAction('pass', ${index})" class="sort-btn text-gray-500 bg-gray-100 dark:bg-gray-800">⏭️ 패스</button>
+                <button onclick="inboxItemAction('later', ${index})" class="sort-btn text-blue-600 bg-blue-50 dark:bg-blue-900/20">⏳ 나중에</button>
+            </div>
+        </div>`;
+
+    openModal(item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), nav + info + content + actions);
+}
+
+// 리뷰 모드 네비게이션
+function reviewNav(dir) {
+    const next = (STATE._reviewIndex || 0) + dir;
+    if (next >= 0 && next < STATE.inbox.length) openInboxItem(next);
+}
+
+// 개별 아이템 액션 (모달에서 분류)
+async function inboxItemAction(target, index, subfolder) {
+    const item = STATE.inbox[index];
+    if (!item || !item.fileData) return;
+
+    try {
+        if (target === 'later') {
+            // 나중에 — 그냥 다음 글로 넘어감
+            const next = index + 1;
+            if (next < STATE.inbox.length) { openInboxItem(next); }
+            else { closeModal(); }
+            return;
+        }
+
+        if (target === 'todo') {
+            todos.items.unshift({ id: Date.now(), text: item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), done: false, createdAt: new Date().toISOString() });
+            todos.save(); todos.updateBadge();
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+        } else if (target === 'pass') {
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+        } else {
+            const folder = subfolder ? `${target}/${subfolder}` : target;
+            await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), {
+                message: `[dashboard] 리뷰 분류: ${item.name} → ${folder}/`,
+                content: item.fileData.content,
+            });
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+        }
+
+        // 처리 완료 → 목록에서 제거 + 다음 글로 자동 이동
+        STATE.inbox.splice(index, 1);
+        updateInboxBadge(STATE.inbox.length);
+        renderInboxList();
+
+        if (STATE.inbox.length === 0) {
+            closeModal();
+            renderInboxList(); // 빈 상태 표시
+        } else {
+            const nextIdx = Math.min(index, STATE.inbox.length - 1);
+            openInboxItem(nextIdx);
+        }
+    } catch (e) {
+        alert('처리 실패: ' + e.message);
+    }
 }
 
 async function executeAllClassify() {
