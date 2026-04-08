@@ -312,7 +312,7 @@ function statusSummary(items, prefix) {
 // ============================================================
 // 7. 아이템 뷰어 + 액션
 // ============================================================
-async function openItemViewer(url, path, title, section) {
+async function openItemViewer(url, path, title) {
     openModal(title, '<div class="text-center text-gray-500 py-8">불러오는 중...</div>');
     try {
         const fileData = await ghApi.get(url);
@@ -530,19 +530,33 @@ async function inboxItemAction(target, index, subfolder) {
             return;
         }
 
+        // 최신 SHA 재조회 (409 Conflict 방지)
+        const fresh = await ghApi.get(ghApi.repoUrl(`inbox/${item.name}`));
+        const sha = fresh.sha;
+        const content = fresh.content;
+
         if (target === 'todo') {
             todos.items.unshift({ id: Date.now(), text: item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), done: false, createdAt: new Date().toISOString() });
             todos.save(); todos.updateBadge();
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), sha);
         } else if (target === 'pass') {
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), sha);
         } else {
             const folder = subfolder ? `${target}/${subfolder}` : target;
-            await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), {
+            // 대상 파일이 이미 있으면 SHA 포함해서 덮어쓰기
+            let existingSha = null;
+            try {
+                const existing = await ghApi.get(ghApi.repoUrl(`${folder}/${item.name}`));
+                existingSha = existing.sha;
+            } catch { /* 없으면 새로 생성 */ }
+
+            const putBody = {
                 message: `[dashboard] 리뷰 분류: ${item.name} → ${folder}/`,
-                content: item.fileData.content,
-            });
-            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
+                content: content,
+            };
+            if (existingSha) putBody.sha = existingSha;
+            await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), putBody);
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), sha);
         }
 
         // 처리 완료 → 목록에서 제거 + 다음 글로 자동 이동
