@@ -159,7 +159,7 @@ body.modal-open {
 }
 
 .theme-badge {
-    @apply px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white shadow-sm;
+    @apply px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider text-on-surface-variant bg-surface-low;
 }
 
 .cluster-card {

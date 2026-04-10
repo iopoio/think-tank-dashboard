@@ -1,11 +1,16 @@
 /** Think Tank Dashboard - app.js */
 const esc = (t) => t ? String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])) : '';
-// Lucide SVG 인라인 헬퍼 (innerHTML용)
-const icon = (name, cls = 'w-4 h-4') => `<i data-lucide="${name}" class="${cls}"></i>`;
 const refreshIcons = () => { if (typeof lucide !== 'undefined') lucide.createIcons(); };
-// 분류 아이콘/라벨
 const CLASSIFY_ICONS = { ideas: '💡', domains: '📚', journal: '📝', todo: '📌' };
 const CLASSIFY_LABELS = { ideas: '아이디어', domains: '도메인', journal: '회고', todo: '할일' };
+// 파일명 → 읽기 좋은 제목 (날짜/시간/태그 제거)
+function cleanTitle(filename) {
+    let name = filename.replace(/\.md$/i, '');
+    // "2026-04-05_0339_AI,효율화,아이디" → 태그 부분만 추출
+    const m = name.match(/^\d{4}-?\d{2}-?\d{2}[_\s]?\d{0,4}[_\s]?(.*)/);
+    if (m && m[1]) name = m[1];
+    return name.replace(/[-_]/g, ' ').trim() || filename.replace(/\.md$/i, '');
+}
 const GITHUB_REPO = 'iopoio/think-tank-inbox';
 const STATE = {
     theme: localStorage.getItem('theme') || 'light',
@@ -254,7 +259,7 @@ function openItemViewerSafe(encodedUrl, encodedPath, encodedTitle) {
 function renderSortedItems(items, section, prefix) {
     const mapped = items.map(item => {
         const path = prefix ? `${prefix}/${item.name}` : `${section}/${item.name}`;
-        const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+        const title = cleanTitle(item.name);
         return { item, path, title, st: statusIndicator(path) };
     });
     mapped.sort((a, b) => a.st.sort - b.st.sort);
@@ -371,7 +376,7 @@ function renderInboxCard(item, i) {
     const icon = CLASSIFY_ICONS[c.target] || '📄';
     const label = CLASSIFY_LABELS[c.target] || c.target;
     const sub = c.subfolder ? ` / ${c.subfolder}` : '';
-    const title = item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
+    const title = cleanTitle(item.name);
     const confHtml = confidenceBadge(item.confidence);
     const colorClass = c.target === 'ideas' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' : c.target === 'journal' ? 'text-violet-600 bg-violet-50 dark:bg-violet-900/20' : c.target === 'todo' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' : 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20';
     return `
@@ -471,7 +476,7 @@ async function openInboxItem(index) {
             </div>
         </div>`;
 
-    openModal(item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), nav + info + content + actions);
+    openModal(cleanTitle(item.name), nav + info + content + actions);
 }
 
 // 리뷰 모드 네비게이션
@@ -500,7 +505,7 @@ async function inboxItemAction(target, index, subfolder) {
         const content = fresh.content;
 
         if (target === 'todo') {
-            todos.items.unshift({ id: Date.now(), text: item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), done: false, createdAt: new Date().toISOString() });
+            todos.items.unshift({ id: Date.now(), text: cleanTitle(item.name), done: false, createdAt: new Date().toISOString() });
             todos.save(); todos.updateBadge();
             await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), sha);
         } else if (target === 'pass') {
@@ -547,7 +552,7 @@ async function executeAllClassify() {
     for (const item of items) {
         try {
             const c = item.classification, folder = c.subfolder ? `${c.target}/${c.subfolder}` : c.target;
-            if (c.target === 'todo') { todos.items.unshift({ id: Date.now() + Math.random(), text: item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), done: false, createdAt: new Date().toISOString() }); todos.save(); }
+            if (c.target === 'todo') { todos.items.unshift({ id: Date.now() + Math.random(), text: cleanTitle(item.name), done: false, createdAt: new Date().toISOString() }); todos.save(); }
             else if (c.target !== 'pass') await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), { message: `자동 분류: ${item.name}`, content: item.fileData.content });
             await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
             success++;
@@ -594,17 +599,16 @@ const dnaView = {
             const items = this.themeGroups[t.id] || [];
             return `
             <div id="group-${t.id}" class="cluster-group">
-                <div class="theme-header" style="border-color: ${t.color}" onclick="this.nextElementSibling.classList.toggle('hidden'); dnaView.drawLines();">
+                <div class="theme-header" style="border-color: ${t.color}20" onclick="this.nextElementSibling.classList.toggle('hidden'); dnaView.drawLines();">
                     <div class="flex items-center gap-3">
-                        <span class="theme-badge" style="background-color: ${t.color}">${esc(t.id).toUpperCase()}</span>
-                        <h3 class="font-extrabold text-lg text-gray-800 dark:text-gray-100">${esc(t.name)}</h3>
-                        <span class="text-xs text-gray-400 font-bold">${items.length} ideas</span>
+                        <span class="theme-badge">${esc(t.name)}</span>
+                        <span class="text-xs text-on-variant/40 font-bold">${items.length}개</span>
                     </div>
-                    <span class="text-gray-300 dark:text-gray-600">▾</span>
+                    <span class="text-on-variant/30">▾</span>
                 </div>
                 <div class="hidden p-4 relative">
                     <svg id="svg-${t.id}" class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible"></svg>
-                    <div class="flex flex-nowrap overflow-x-auto gap-12 items-center no-scrollbar relative z-10 py-8">${this.renderClusterCards(items, t.id)}</div>
+                    <div class="flex flex-nowrap overflow-x-auto gap-3 items-start no-scrollbar relative z-10 py-4 px-1">${this.renderClusterCards(items, t.id)}</div>
                 </div>
             </div>`;
         }).join('');
