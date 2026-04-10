@@ -189,60 +189,23 @@ function parseFrontmatter(text) {
 }
 
 function parseConfidence(text) {
-    const fmt1G = text.match(/🟢(\d+)/), fmt1Y = text.match(/🟡(\d+)/), fmt1R = text.match(/🔴(\d+)/);
-    if (fmt1G || fmt1Y || fmt1R) {
-        const g = fmt1G ? +fmt1G[1] : 0, y = fmt1Y ? +fmt1Y[1] : 0, r = fmt1R ? +fmt1R[1] : 0;
-        const tm = text.match(/총점[:\s]*(-?\d+)/);
-        return { green: g, yellow: y, red: r, total: tm ? +tm[1] : g - r };
-    }
     const g = (text.match(/🟢/g) || []).length, y = (text.match(/🟡/g) || []).length, r = (text.match(/🔴/g) || []).length;
     return (g + y + r === 0) ? null : { green: g, yellow: y, red: r, total: g - r };
 }
-
 function confidenceBadge(conf) {
     if (!conf) return '';
     const color = conf.total >= 3 ? 'text-emerald-500' : conf.total >= 1 ? 'text-amber-500' : 'text-red-500';
-    const label = conf.total >= 3 ? '높음' : conf.total >= 1 ? '중간' : '낮음';
-    return `<span class="text-[10px] font-bold ${color}">확신도 ${conf.total}점 (${label})</span>`;
+    return `<span class="text-[10px] font-bold ${color}">확신도 ${conf.total}점</span>`;
 }
-
-// Think 시스템 공식 태그 기준
 function classifyItem(meta, content) {
-    const tags = Array.isArray(meta.tags) ? meta.tags : (meta.tags ? [meta.tags] : []);
-    const text = content.toLowerCase();
-    const domainTags = ['AI', 'ai', '투자', '효율화', '인테리어', '기타'];
-    const ideaTags = ['아이디어', '구상', 'idea'];
-    const journalTags = ['회고', '일기', '리뷰', 'journal', 'review'];
-    const todoKw = ['해야', '할일', '예정', '마감', '기한', 'todo', '공모전', '신청'];
-
-    for (const t of tags) {
-        const tl = t.toLowerCase();
-        if (ideaTags.some(k => tl.includes(k))) return { target: 'ideas', reason: `태그: ${t}` };
-        if (journalTags.some(k => tl.includes(k))) return { target: 'journal', reason: `태그: ${t}` };
-        if (domainTags.some(k => tl === k.toLowerCase())) return { target: 'domains', subfolder: t, reason: `태그: ${t}` };
-    }
-    if (todoKw.some(k => text.includes(k))) return { target: 'todo', reason: '할일 키워드 감지' };
-    const nm = (meta._filename || '').toLowerCase();
-    if (nm.includes('회고') || nm.includes('journal')) return { target: 'journal', reason: '파일명' };
-    if (nm.includes('idea') || nm.includes('아이디어')) return { target: 'ideas', reason: '파일명' };
-    if (tags.length > 0) return { target: 'domains', subfolder: tags[0], reason: `태그: ${tags[0]}` };
-    return { target: 'domains', subfolder: '미분류', reason: '자동 기본값' };
+    const tags = [].concat(meta.tags || []), text = content.toLowerCase(), nm = (meta._filename || '').toLowerCase();
+    if (tags.some(t => /아이디어|idea|구상/.test(t.toLowerCase())) || /idea|아이디어/.test(nm)) return { target: 'ideas', reason: '태그/파일명' };
+    if (tags.some(t => /회고|일기|journal|review/.test(t.toLowerCase())) || /회고|journal/.test(nm)) return { target: 'journal', reason: '태그/파일명' };
+    if (/AI|ai|투자|효율화|인테리어|기타/.test(tags[0])) return { target: 'domains', subfolder: tags[0], reason: '태그' };
+    if (/해야|할일|예정|todo|공모전/.test(text)) return { target: 'todo', reason: '키워드' };
+    return { target: 'domains', subfolder: tags[0] || '미분류', reason: '기본값' };
 }
-
-const CLASSIFY_ICONS = { ideas: '💡', domains: '📚', journal: '📝', todo: '📌' };
-const CLASSIFY_LABELS = { ideas: '아이디어', domains: '도메인', journal: '회고', todo: '할일' };
-
-function simpleMarkdown(text) {
-    return text
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/^### (.+)$/gm, '<h3 class="text-base font-bold mt-4 mb-1">$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-4 mb-1">$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-        .replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
-}
+const simpleMarkdown = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/^### (.+)$/gm, '<h3 class="text-base font-bold mt-4 mb-1">$1</h3>').replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-4 mb-1">$1</h2>').replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>').replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
 
 // ============================================================
 // 6. 공통 UI 컴포넌트 (모달, 카드, 상태 표시)
@@ -577,35 +540,19 @@ async function inboxItemAction(target, index, subfolder) {
 }
 
 async function executeAllClassify() {
-    const items = STATE.inbox.filter(item => item.fileData);
-    if (items.length === 0) return;
-    const summary = items.map(item => {
-        const c = item.classification;
-        return `• ${item.name.replace(/\.md$/i, '')} → ${CLASSIFY_LABELS[c.target] || c.target}${c.subfolder ? '/' + c.subfolder : ''}`;
-    }).join('\n');
-    if (!confirm(`${items.length}개 항목을 분류합니다:\n\n${summary}\n\n진행하시겠습니까?`)) return;
-
-    let success = 0, fail = 0;
+    const items = STATE.inbox.filter(item => item.fileData); if (items.length === 0) return;
+    if (!confirm(`${items.length}개 항목을 분류하시겠습니까?`)) return;
+    let success = 0;
     for (const item of items) {
         try {
-            const c = item.classification;
-            if (c.target === 'todo') {
-                todos.items.unshift({ id: Date.now() + Math.random(), text: item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), done: false, createdAt: new Date().toISOString() });
-                todos.save();
-                await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
-            } else if (c.target === 'pass') {
-                await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
-            } else {
-                const folder = c.subfolder ? `${c.target}/${c.subfolder}` : c.target;
-                await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), { message: `[dashboard] 자동 분류: ${item.name} → ${folder}/`, content: item.fileData.content });
-                await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
-            }
+            const c = item.classification, folder = c.subfolder ? `${c.target}/${c.subfolder}` : c.target;
+            if (c.target === 'todo') { todos.items.unshift({ id: Date.now() + Math.random(), text: item.name.replace(/\.md$/i, '').replace(/[-_]/g, ' '), done: false, createdAt: new Date().toISOString() }); todos.save(); }
+            else if (c.target !== 'pass') await ghApi.put(ghApi.repoUrl(`${folder}/${item.name}`), { message: `자동 분류: ${item.name}`, content: item.fileData.content });
+            await ghApi.delete(ghApi.repoUrl(`inbox/${item.name}`), item.fileData.sha);
             success++;
-        } catch (e) { console.error(`분류 실패: ${item.name}`, e); fail++; }
+        } catch (e) { console.error(e); }
     }
-    todos.updateBadge();
-    alert(`분류 완료: ${success}건 성공${fail > 0 ? ', ' + fail + '건 실패' : ''}`);
-    await loadInboxFromGitHub();
+    todos.updateBadge(); alert(`${success}건 분류 완료`); await loadInboxFromGitHub();
 }
 
 // ============================================================
@@ -613,16 +560,90 @@ async function executeAllClassify() {
 // ============================================================
 async function loadIdeasFromGitHub(force = false) {
     if (!force && STATE.loaded.ideas) return;
-    const list = document.getElementById('ideas-list');
+    const list = el('ideas-list');
     list.innerHTML = '<div class="card animate-pulse h-24"></div>';
     try {
         const files = await ghApi.get(ghApi.repoUrl('ideas/'));
-        const items = files.filter(f => f.type === 'file');
-        if (items.length === 0) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">아이디어가 없습니다.</div>'; return; }
+        const items = files.filter(f => f.type === 'file' && f.name.endsWith('.md'));
         list.innerHTML = statusSummary(items, 'ideas') + renderSortedItems(items, 'ideas');
         STATE.loaded.ideas = true;
-    } catch (e) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">ideas/ 폴더를 찾을 수 없습니다.</div>'; }
+        dnaView.load(); // 미리 로드
+    } catch (e) { list.innerHTML = '<div class="card text-center py-12">ideas/ 로드 실패</div>'; }
 }
+
+window.switchSubTab = (subId) => {
+    document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.id === `subtab-${subId}`));
+    document.querySelectorAll('.subtab-content').forEach(c => c.classList.toggle('hidden', !c.id.includes(subId)));
+    if (subId === 'cluster') dnaView.render();
+};
+
+const dnaView = {
+    data: null,
+    async load() {
+        try {
+            const f = await ghApi.get(ghApi.repoUrl('ideas/아이디어_DNA_인덱스.md'));
+            this.data = this.parse(new TextDecoder().decode(Uint8Array.from(atob(f.content), c => c.charCodeAt(0))));
+        } catch (e) { console.error('DNA 로드 실패'); }
+    },
+    parse(md) {
+        const themes = { '공간': 'space', '공공': 'data', '1인': 'single', '차량': 'mobility', '가격': 'price', '마이': 'tool' };
+        const clusters = {};
+        md.split('━━━').slice(1).forEach(s => {
+            const lines = s.trim().split('\n');
+            const name = lines[0].trim().split(' ')[0];
+            const theme = Object.keys(themes).find(k => name.includes(k));
+            if (theme) clusters[themes[theme]] = lines.slice(1).join('\n');
+        });
+        return clusters;
+    },
+    render() {
+        const cont = el('cluster-container'); if (!this.data) { cont.innerHTML = '<p class="p-8 text-center text-gray-500">로딩 중...</p>'; return; }
+        const labels = { space: '공간 활용', data: '공공데이터+AI', single: '1인가구', mobility: '차량/모빌리티', price: '가격 불투명 해소', tool: '마이크로 도구' };
+        cont.innerHTML = Object.entries(this.data).map(([k, txt]) => `
+            <div id="group-${k}" class="cluster-group theme-${k}">
+                <div class="flex items-center justify-between cursor-pointer group/title" onclick="this.nextElementSibling.classList.toggle('hidden'); dnaView.drawLines();">
+                    <h3 class="font-extrabold text-xl font-outfit mb-4 text-gray-800 dark:text-gray-200">${labels[k]}</h3>
+                    <span class="text-gray-400 group-hover/title:text-indigo-500 transition-colors">↕</span>
+                </div>
+                <div class="flex flex-nowrap overflow-x-auto gap-12 p-4 items-center no-scrollbar">${this.renderClusterRow(txt, k)}</div>
+            </div>`).join('');
+        setTimeout(() => this.drawLines(), 100);
+    },
+    renderClusterRow(txt, theme) {
+        return txt.split('\n').filter(l => l.trim()).map(line => {
+            const parts = line.split(/[→↗───]+/);
+            return parts.map(p => {
+                const rawName = p.split('(')[0].trim(); if (!rawName) return '';
+                const name = rawName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const year = p.match(/\((\d+)\)/)?.[1] || '';
+                const isActive = p.includes('🔥'); const isDone = p.includes('✅');
+                const status = isActive ? '🔥' : isDone ? '✅' : '💤';
+                const id = `card-${theme}-${rawName.replace(/[^a-zA-Z0-9가-힣]/g, '')}`;
+                return `<div id="${id}" class="cluster-card border-l-4 theme-${theme}">
+                    <div class="text-[10px] text-gray-400 font-bold mb-1">${year}</div>
+                    <div class="font-bold text-sm text-gray-800 dark:text-gray-100">${name}</div>
+                    <div class="absolute top-2 right-2 text-xs">${status}</div>
+                </div>`;
+            }).join('');
+        }).join('');
+    },
+    drawLines() {
+        const svg = el('cluster-svg'); if (!svg || window.innerWidth < 768) return;
+        svg.innerHTML = ''; const rect = svg.getBoundingClientRect();
+        Object.keys(this.data).forEach(k => {
+            const cards = Array.from(el(`group-${k}`).querySelectorAll('.cluster-card'));
+            for (let i = 0; i < cards.length - 1; i++) {
+                const start = cards[i].getBoundingClientRect(), end = cards[i+1].getBoundingClientRect();
+                const x1 = start.right - rect.left, y1 = start.top + start.height/2 - rect.top;
+                const x2 = end.left - rect.left, y2 = end.top + end.height/2 - rect.top;
+                svg.innerHTML += `<path d="M ${x1} ${y1} L ${x2} ${y2}" class="cluster-line" marker-end="url(#arrow)"/>`;
+            }
+        });
+        if (!el('arrow-head')) {
+            svg.innerHTML += `<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="cluster-arrow"/></marker></defs>`;
+        }
+    }
+};
 
 async function loadDomainsFromGitHub(force = false) {
     if (!force && STATE.loaded.domains) return;
@@ -798,9 +819,11 @@ function updateStats() {
 }
 
 function initSearch() {
-    const input = document.getElementById('global-search'); if (!input) return;
+    const input = el('global-search'); if (!input) return;
     input.addEventListener('input', (e) => { if (e.target.value.length > 2) console.log('검색:', e.target.value); });
 }
+
+const el = (id) => document.getElementById(id);
 
 // ============================================================
 // 11. 부팅

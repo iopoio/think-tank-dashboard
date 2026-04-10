@@ -209,12 +209,32 @@
 
                 <!-- Ideas Tab -->
                 <section id="tab-ideas" class="tab-pane hidden">
-                    <div class="mb-8">
-                        <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">💡 Ideas</h2>
-                        <p class="text-gray-500 dark:text-gray-400 hidden md:block">다음 아이디어를 포착하고 발전시키세요.</p>
+                    <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+                        <div>
+                            <h2 class="text-2xl md:text-4xl font-extrabold font-outfit mb-1 md:mb-2 tracking-tight">💡 Ideas</h2>
+                            <p class="text-gray-500 dark:text-gray-400 hidden md:block">다음 아이디어를 포착하고 발전시키세요.</p>
+                        </div>
+                        <!-- 서브 탭 스위치 -->
+                        <div class="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl w-fit">
+                            <button onclick="switchSubTab('list')" id="subtab-list" class="subtab-btn active px-4 py-2 rounded-lg text-xs font-bold transition-all">목록</button>
+                            <button onclick="switchSubTab('cluster')" id="subtab-cluster" class="subtab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all">클러스터</button>
+                        </div>
                     </div>
-                    <div id="ideas-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Ideas -->
+
+                    <!-- 목록 뷰 -->
+                    <div id="ideas-list-view" class="subtab-content">
+                        <div id="ideas-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <!-- Ideas -->
+                        </div>
+                    </div>
+
+                    <!-- 클러스터 뷰 -->
+                    <div id="ideas-cluster-view" class="subtab-content hidden relative min-h-[600px]">
+                        <!-- Desktop SVG Layer -->
+                        <svg id="cluster-svg" class="absolute inset-0 w-full h-full pointer-events-none hidden md:block z-0"></svg>
+                        <div id="cluster-container" class="space-y-12 relative z-10">
+                            <!-- Clusters injected here -->
+                        </div>
                     </div>
                 </section>
 
