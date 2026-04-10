@@ -633,13 +633,11 @@ const dnaView = {
             }
             const onClick = (i.detail_path && i.detail_path !== 'None') ? `onclick="window.open('https://github.com/iopoio/think-tank-inbox/blob/main/${encodeURI(i.detail_path)}', '_blank')"` : '';
             return `<div id="card-${i.id}" class="cluster-card ${urgentClass} cursor-pointer" ${onClick}>
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[8px] text-on-variant/40">${esc(i.year) || '-'}</span>
-                    <span class="status-badge ${statusClass}">${statusLabels[i.status] || esc(i.status)}</span>
-                </div>
-                <h4 class="font-bold text-[11px] text-on-surface leading-snug mb-1">${esc(i.name)}</h4>
-                <div class="hidden md:flex flex-wrap gap-0.5">${keywords}</div>
-                ${ddayHtml ? '<div class="mt-1">' + ddayHtml + '</div>' : ''}
+                <span class="status-badge ${statusClass} mb-2 inline-block">${statusLabels[i.status] || esc(i.status)}</span>
+                <h4 class="font-bold text-[11px] text-on-surface leading-snug mb-1.5">${esc(i.name)}</h4>
+                <p class="text-[8px] text-on-variant/40 mb-1">${esc(i.year) || ''}</p>
+                <div class="flex flex-wrap gap-0.5 overflow-hidden max-h-8">${keywords}</div>
+                ${ddayHtml ? '<div class="mt-1.5">' + ddayHtml + '</div>' : ''}
             </div>`;
         }).join('');
     },
