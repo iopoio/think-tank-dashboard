@@ -162,6 +162,20 @@ body.modal-open {
     @apply px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider text-on-surface-variant bg-surface-low;
 }
 
+.cluster-cards-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+@media (min-width: 768px) {
+    .cluster-cards-container {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 1rem;
+    }
+}
+
 .cluster-card {
     @apply relative bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3 shadow-sm hover:shadow-lg hover:border-primary/20 transition-all z-10;
 }

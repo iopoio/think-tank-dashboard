@@ -613,7 +613,7 @@ const dnaView = {
                 </div>
                 <div class="hidden p-4 relative">
                     <svg id="svg-${t.id}" class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible"></svg>
-                    <div class="grid grid-cols-2 gap-3 md:flex md:flex-nowrap md:overflow-x-auto md:gap-4 relative z-10 py-4">${this.renderClusterCards(items, t.id)}</div>
+                    <div class="cluster-cards-container relative z-10 py-4">${this.renderClusterCards(items, t.id)}</div>
                 </div>
             </div>`;
         }).join('');
