@@ -196,8 +196,8 @@ body.modal-open {
     @apply px-2 py-0.5 rounded-lg text-[10px] font-bold;
 }
 .status-active { @apply bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300; }
-.status-done { @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300; }
-.status-archived { @apply bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400; }
+.status-done, .status-completed { @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300; }
+.status-archived, .status-sleeping { @apply bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400; }
 
 .keyword-tag {
     @apply text-[7px] px-1 py-px bg-surface-low text-on-variant/50 rounded !border-none leading-tight;

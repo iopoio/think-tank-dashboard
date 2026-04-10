@@ -612,7 +612,7 @@ const dnaView = {
     },
     renderClusterCards(items, theme) {
         return items.map(i => {
-            const statusLabels = { active: '🔥 진행중', done: '✅ 완료', archived: '💤 잠자는' };
+            const statusLabels = { active: '🔥 진행중', done: '✅ 완료', archived: '💤 잠자는', sleeping: '💤 잠자는', completed: '✅ 완료' };
             const statusClass = `status-${i.status}`;
             const keywords = (i.keywords || []).map(k => `<span class="keyword-tag">#${esc(k)}</span>`).join(' ');
             let ddayHtml = '', urgentClass = '';
