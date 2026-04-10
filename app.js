@@ -1,4 +1,5 @@
 /** Think Tank Dashboard - app.js */
+const esc = (t) => t ? String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])) : '';
 const GITHUB_REPO = 'iopoio/think-tank-inbox';
 const STATE = {
     theme: localStorage.getItem('theme') || 'light',
@@ -588,8 +589,8 @@ const dnaView = {
             <div id="group-${t.id}" class="cluster-group">
                 <div class="theme-header" style="border-color: ${t.color}" onclick="this.nextElementSibling.classList.toggle('hidden'); dnaView.drawLines();">
                     <div class="flex items-center gap-3">
-                        <span class="theme-badge" style="background-color: ${t.color}">${t.id.toUpperCase()}</span>
-                        <h3 class="font-extrabold text-lg text-gray-800 dark:text-gray-100">${t.name}</h3>
+                        <span class="theme-badge" style="background-color: ${t.color}">${esc(t.id).toUpperCase()}</span>
+                        <h3 class="font-extrabold text-lg text-gray-800 dark:text-gray-100">${esc(t.name)}</h3>
                         <span class="text-xs text-gray-400 font-bold">${items.length} ideas</span>
                     </div>
                     <span class="text-gray-300 dark:text-gray-600">▾</span>
@@ -603,7 +604,6 @@ const dnaView = {
         setTimeout(() => this.drawLines(), 100);
     },
     renderClusterCards(items, theme) {
-        const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         return items.map(i => {
             const statusLabels = { active: '🔥 진행중', done: '✅ 완료', archived: '💤 잠자는' };
             const statusClass = `status-${i.status}`;
@@ -618,8 +618,8 @@ const dnaView = {
             const onClick = i.detail_path ? `onclick="window.open('https://github.com/iopoio/think-tank-inbox/blob/main/${encodeURI(i.detail_path)}', '_blank')"` : 'onclick="alert(\'상세 자료가 아직 연결되지 않았습니다.\')"';
             return `<div id="card-${i.id}" class="cluster-card ${urgentClass} cursor-pointer" ${onClick}>
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] text-gray-400 font-bold">${i.year || '-'}</span>
-                    <span class="status-badge ${statusClass}">${statusLabels[i.status] || i.status}</span>
+                    <span class="text-[10px] text-gray-400 font-bold">${esc(i.year) || '-'}</span>
+                    <span class="status-badge ${statusClass}">${statusLabels[i.status] || esc(i.status)}</span>
                 </div>
                 <h4 class="font-extrabold text-sm text-gray-800 dark:text-gray-100 mb-2 truncate">${esc(i.name)}</h4>
                 <div class="flex flex-wrap gap-1 mb-3">${keywords}</div>
