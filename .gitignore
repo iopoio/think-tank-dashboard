@@ -11,6 +11,10 @@ config.js
 *secret*
 *credential*
 
+# 디자인 시안 (로컬 전용)
+stitch/
+stitch_think_tank/
+
 # OS 파일
 .DS_Store
 Thumbs.db
