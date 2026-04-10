@@ -837,6 +837,7 @@ function bootApp() {
     initTheme(); initTabs(); initGitHubAuth(); initModal(); initReminders(); initCharts(); initSearch();
     if (ghApi.isConnected()) loadLiveData();
     updateStats(); todos.updateBadge();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
