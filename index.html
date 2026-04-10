@@ -123,10 +123,10 @@
             </div>
 
             <nav class="space-y-2 flex-grow overflow-y-auto">
-                <div class="nav-item active" data-tab="inbox" onclick="switchTab('inbox')">
-                    <span id="inbox-badge" class="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold absolute -top-1 -right-1 hidden">0</span>
+                <div class="nav-item active relative" data-tab="inbox" onclick="switchTab('inbox')">
                     <span class="mr-3 text-lg">📥</span>
                     <span class="flex-grow">받은함 (Inbox)</span>
+                    <span id="inbox-badge" class="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold hidden">0</span>
                 </div>
                 <div class="nav-item" data-tab="ideas" onclick="switchTab('ideas')">
                     <span class="mr-3 text-lg">💡</span> 아이디어 (Ideas)
@@ -137,10 +137,10 @@
                 <div class="nav-item" data-tab="journal" onclick="switchTab('journal')">
                     <span class="mr-3 text-lg">📝</span> 회고 (Journal)
                 </div>
-                <div class="nav-item" data-tab="todos" onclick="switchTab('todos')">
-                    <span id="todo-badge" class="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold absolute -top-1 -right-1 hidden">0</span>
+                <div class="nav-item relative" data-tab="todos" onclick="switchTab('todos')">
                     <span class="mr-3 text-lg">📌</span>
                     <span class="flex-grow">할일 (Todo)</span>
+                    <span id="todo-badge" class="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold hidden">0</span>
                 </div>
                 <div class="nav-item" data-tab="stats" onclick="switchTab('stats')">
                     <span class="mr-3 text-lg">📊</span> 통계 (Statistics)
