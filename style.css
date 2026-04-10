@@ -106,39 +106,54 @@ body.modal-open {
 }
 
 .cluster-group {
-    @apply border-l-4 pl-4 py-2 mb-8;
+    @apply mb-4 transition-all duration-300;
 }
 
-/* Theme Colors */
-.theme-space { border-color: var(--theme-space); }
-.theme-data { border-color: var(--theme-data); }
-.theme-single { border-color: var(--theme-single); }
-.theme-mobility { border-color: var(--theme-mobility); }
-.theme-price { border-color: var(--theme-price); }
-.theme-tool { border-color: var(--theme-tool); }
+.theme-header {
+    @apply flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-800 rounded-2xl transition-all border-l-8 mb-2;
+}
+
+.theme-badge {
+    @apply px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white shadow-sm;
+}
 
 .cluster-card {
-    @apply relative bg-white dark:bg-gray-800 border-2 border-transparent dark:border-transparent rounded-xl p-4 shadow-sm hover:shadow-md transition-all z-10 w-48 shrink-0;
+    @apply relative bg-white dark:bg-gray-800 border-2 border-transparent dark:border-transparent rounded-2xl p-4 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all z-10 w-52 shrink-0;
+}
+
+.cluster-card.urgent {
+    @apply border-red-500/50 shadow-lg shadow-red-500/5;
 }
 
 .cluster-line {
     fill: none;
-    stroke: #cbd5e1; /* gray-300 */
-    stroke-width: 2;
-    stroke-dasharray: 4;
+    stroke: #e2e8f0; /* gray-200 */
+    stroke-width: 2.5;
+    stroke-dasharray: 6 4;
     transition: all 0.3s;
 }
 .dark .cluster-line {
-    stroke: #475569; /* gray-600 */
+    stroke: #334155; /* gray-700 */
 }
 
 .cluster-arrow {
-    fill: #cbd5e1;
+    fill: #e2e8f0;
 }
 .dark .cluster-arrow {
-    fill: #475569;
+    fill: #334155;
 }
 
 .cluster-card:hover {
-    @apply scale-[1.02] shadow-indigo-500/10;
+    @apply -translate-y-1;
+}
+
+.status-badge {
+    @apply px-2 py-0.5 rounded-lg text-[10px] font-bold;
+}
+.status-active { @apply bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300; }
+.status-done { @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300; }
+.status-archived { @apply bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400; }
+
+.keyword-tag {
+    @apply text-[9px] px-1.5 py-0.5 bg-gray-50 dark:bg-dark-800 text-gray-400 dark:text-gray-500 rounded border border-gray-100 dark:border-gray-700/50;
 }

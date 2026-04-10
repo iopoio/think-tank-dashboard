@@ -1,11 +1,4 @@
-/**
- * Think Tank Dashboard - app.js
- * 클과장(Claude) + 제대리(Gemini) 공동 개발
- */
-
-// ============================================================
-// 1. 설정 & 상태
-// ============================================================
+/** Think Tank Dashboard - app.js */
 const GITHUB_REPO = 'iopoio/think-tank-inbox';
 const STATE = {
     theme: localStorage.getItem('theme') || 'light',
@@ -19,9 +12,7 @@ const STATE = {
     ]
 };
 
-// ============================================================
-// 2. GitHub API
-// ============================================================
+// GitHub API
 const ghApi = {
     token: localStorage.getItem('gh_token') || (typeof CONFIG !== 'undefined' && CONFIG.GITHUB_TOKEN) || null,
 
@@ -62,10 +53,7 @@ const ghApi = {
     isConnected() { return !!this.token; }
 };
 
-// ============================================================
-// 3. 읽음 상태 관리 (localStorage)
-//    null → 'read' → 'later' / 'done'
-// ============================================================
+// 읽음 상태 관리
 const readStatus = {
     _key: 'tt_read_items',
     _data: null,
@@ -98,9 +86,7 @@ const readStatus = {
     countByStatus(paths, s) { return paths.filter(p => this.getStatus(p) === s).length; },
 };
 
-// ============================================================
-// 4. 할일 (Todo)
-// ============================================================
+// 할일 (Todo)
 const todos = {
     items: JSON.parse(localStorage.getItem('tt_todos') || '[]'),
     filter: 'all',
@@ -585,70 +571,79 @@ window.switchSubTab = (subId) => {
 };
 
 const dnaView = {
-    data: null,
+    data: null, idMap: {}, themeGroups: {},
     async load() {
         try {
-            const f = await ghApi.get(ghApi.repoUrl('ideas/아이디어_DNA_인덱스.md'));
-            this.data = this.parse(new TextDecoder().decode(Uint8Array.from(atob(f.content), c => c.charCodeAt(0))));
-        } catch (e) { console.error('DNA 로드 실패'); }
-    },
-    parse(md) {
-        const themes = { '공간': 'space', '공공': 'data', '1인': 'single', '차량': 'mobility', '가격': 'price', '마이': 'tool' };
-        const clusters = {};
-        md.split('━━━').slice(1).forEach(s => {
-            const lines = s.trim().split('\n');
-            const name = lines[0].trim().split(' ')[0];
-            const theme = Object.keys(themes).find(k => name.includes(k));
-            if (theme) clusters[themes[theme]] = lines.slice(1).join('\n');
-        });
-        return clusters;
+            const f = await ghApi.get(ghApi.repoUrl('ideas/아이디어_DNA_인덱스.json'));
+            const res = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(f.content), c => c.charCodeAt(0))));
+            this.data = res; this.idMap = res.ideas.reduce((acc, i) => { acc[i.id] = i; return acc; }, {});
+            this.themeGroups = res.ideas.reduce((acc, i) => { if (!acc[i.theme]) acc[i.theme] = []; acc[i.theme].push(i); return acc; }, {});
+        } catch (e) { console.error('DNA JSON 로드 실패'); }
     },
     render() {
         const cont = el('cluster-container'); if (!this.data) { cont.innerHTML = '<p class="p-8 text-center text-gray-500">로딩 중...</p>'; return; }
-        const labels = { space: '공간 활용', data: '공공데이터+AI', single: '1인가구', mobility: '차량/모빌리티', price: '가격 불투명 해소', tool: '마이크로 도구' };
-        cont.innerHTML = Object.entries(this.data).map(([k, txt]) => `
-            <div id="group-${k}" class="cluster-group theme-${k}">
-                <div class="flex items-center justify-between cursor-pointer group/title" onclick="this.nextElementSibling.classList.toggle('hidden'); dnaView.drawLines();">
-                    <h3 class="font-extrabold text-xl font-outfit mb-4 text-gray-800 dark:text-gray-200">${labels[k]}</h3>
-                    <span class="text-gray-400 group-hover/title:text-indigo-500 transition-colors">↕</span>
+        cont.innerHTML = this.data.themes.map(t => {
+            const items = this.themeGroups[t.id] || [];
+            return `
+            <div id="group-${t.id}" class="cluster-group">
+                <div class="theme-header" style="border-color: ${t.color}" onclick="this.nextElementSibling.classList.toggle('hidden'); dnaView.drawLines();">
+                    <div class="flex items-center gap-3">
+                        <span class="theme-badge" style="background-color: ${t.color}">${t.id.toUpperCase()}</span>
+                        <h3 class="font-extrabold text-lg text-gray-800 dark:text-gray-100">${t.name}</h3>
+                        <span class="text-xs text-gray-400 font-bold">${items.length} ideas</span>
+                    </div>
+                    <span class="text-gray-300 dark:text-gray-600">▾</span>
                 </div>
-                <div class="flex flex-nowrap overflow-x-auto gap-12 p-4 items-center no-scrollbar">${this.renderClusterRow(txt, k)}</div>
-            </div>`).join('');
+                <div class="hidden p-4 relative">
+                    <svg id="svg-${t.id}" class="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible"></svg>
+                    <div class="flex flex-nowrap overflow-x-auto gap-12 items-center no-scrollbar relative z-10 py-8">${this.renderClusterCards(items, t.id)}</div>
+                </div>
+            </div>`;
+        }).join('');
         setTimeout(() => this.drawLines(), 100);
     },
-    renderClusterRow(txt, theme) {
-        return txt.split('\n').filter(l => l.trim()).map(line => {
-            const parts = line.split(/[→↗───]+/);
-            return parts.map(p => {
-                const rawName = p.split('(')[0].trim(); if (!rawName) return '';
-                const name = rawName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                const year = p.match(/\((\d+)\)/)?.[1] || '';
-                const isActive = p.includes('🔥'); const isDone = p.includes('✅');
-                const status = isActive ? '🔥' : isDone ? '✅' : '💤';
-                const id = `card-${theme}-${rawName.replace(/[^a-zA-Z0-9가-힣]/g, '')}`;
-                return `<div id="${id}" class="cluster-card border-l-4 theme-${theme}">
-                    <div class="text-[10px] text-gray-400 font-bold mb-1">${year}</div>
-                    <div class="font-bold text-sm text-gray-800 dark:text-gray-100">${name}</div>
-                    <div class="absolute top-2 right-2 text-xs">${status}</div>
-                </div>`;
-            }).join('');
+    renderClusterCards(items, theme) {
+        const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return items.map(i => {
+            const statusLabels = { active: '🔥 진행중', done: '✅ 완료', archived: '💤 잠자는' };
+            const statusClass = `status-${i.status}`;
+            const keywords = (i.keywords || []).map(k => `<span class="keyword-tag">#${esc(k)}</span>`).join(' ');
+            let ddayHtml = '', urgentClass = '';
+            if (i.deadline) {
+                const diff = Math.ceil((new Date(i.deadline) - new Date()) / (1000 * 60 * 60 * 24));
+                const ddayText = diff === 0 ? 'D-Day' : diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
+                if (diff <= 7) urgentClass = 'urgent';
+                ddayHtml = `<span class="status-badge bg-red-50 text-red-600 dark:bg-red-900/30 ml-auto">${ddayText}</span>`;
+            }
+            const onClick = i.detail_path ? `onclick="window.open('https://github.com/iopoio/think-tank-inbox/blob/main/${encodeURI(i.detail_path)}', '_blank')"` : 'onclick="alert(\'상세 자료가 아직 연결되지 않았습니다.\')"';
+            return `<div id="card-${i.id}" class="cluster-card ${urgentClass} cursor-pointer" ${onClick}>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] text-gray-400 font-bold">${i.year || '-'}</span>
+                    <span class="status-badge ${statusClass}">${statusLabels[i.status] || i.status}</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-gray-800 dark:text-gray-100 mb-2 truncate">${esc(i.name)}</h4>
+                <div class="flex flex-wrap gap-1 mb-3">${keywords}</div>
+                <div class="flex items-center mt-auto">${ddayHtml}</div>
+            </div>`;
         }).join('');
     },
     drawLines() {
-        const svg = el('cluster-svg'); if (!svg || window.innerWidth < 768) return;
-        svg.innerHTML = ''; const rect = svg.getBoundingClientRect();
-        Object.keys(this.data).forEach(k => {
-            const cards = Array.from(el(`group-${k}`).querySelectorAll('.cluster-card'));
-            for (let i = 0; i < cards.length - 1; i++) {
-                const start = cards[i].getBoundingClientRect(), end = cards[i+1].getBoundingClientRect();
-                const x1 = start.right - rect.left, y1 = start.top + start.height/2 - rect.top;
-                const x2 = end.left - rect.left, y2 = end.top + end.height/2 - rect.top;
-                svg.innerHTML += `<path d="M ${x1} ${y1} L ${x2} ${y2}" class="cluster-line" marker-end="url(#arrow)"/>`;
-            }
+        if (window.innerWidth < 768) return;
+        this.data.themes.forEach(t => {
+            const svg = el(`svg-${t.id}`); if (!svg) return;
+            const container = svg.parentElement; if (container.classList.contains('hidden')) return;
+            svg.innerHTML = '<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="cluster-arrow"/></marker></defs>';
+            (this.themeGroups[t.id] || []).forEach(i => {
+                const s = el(`card-${i.id}`); if (!s || !i.connections) return;
+                i.connections.filter(cid => cid !== '-').forEach(cid => {
+                    const e = el(`card-${cid}`); if (!e) return;
+                    const sr = s.getBoundingClientRect(), er = e.getBoundingClientRect(), cr = container.getBoundingClientRect();
+                    const x1 = sr.right - cr.left, y1 = sr.top + sr.height / 2 - cr.top;
+                    const x2 = er.left - cr.left, y2 = er.top + er.height / 2 - cr.top;
+                    svg.innerHTML += `<path d="M ${x1} ${y1} L ${x2} ${y2}" class="cluster-line" marker-end="url(#arrow)"/>`;
+                });
+            });
         });
-        if (!el('arrow-head')) {
-            svg.innerHTML += `<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="cluster-arrow"/></marker></defs>`;
-        }
     }
 };
 
@@ -694,9 +689,7 @@ async function loadJournalFromGitHub(force = false) {
     } catch (e) { list.innerHTML = '<div class="card text-center text-gray-500 py-12">journal/ 폴더를 찾을 수 없습니다.</div>'; }
 }
 
-// ============================================================
-// 10. 초기화 (PIN, 테마, 탭, 인증, 차트, 리마인더, 검색)
-// ============================================================
+// 초기화
 async function hashPin(pin) {
     const data = new TextEncoder().encode(pin + '_thinktank_salt');
     const hash = await crypto.subtle.digest('SHA-256', data);
