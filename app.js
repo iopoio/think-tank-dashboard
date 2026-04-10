@@ -6,10 +6,15 @@ const CLASSIFY_LABELS = { ideas: '아이디어', domains: '도메인', journal: 
 // 파일명 → 읽기 좋은 제목 (날짜/시간/태그 제거)
 function cleanTitle(filename) {
     let name = filename.replace(/\.md$/i, '');
-    // "2026-04-05_0339_AI,효율화,아이디" → 태그 부분만 추출
-    const m = name.match(/^\d{4}-?\d{2}-?\d{2}[_\s]?\d{0,4}[_\s]?(.*)/);
-    if (m && m[1]) name = m[1];
-    return name.replace(/[-_]/g, ' ').trim() || filename.replace(/\.md$/i, '');
+    // 날짜+시간 제거: "2026-04-05_0339_주제" → "주제"
+    name = name.replace(/^\d{4}[-.]?\d{2}[-.]?\d{2}[_\s-]?\d{0,4}[_\s-]?/, '');
+    // 마크다운 볼드 제거
+    name = name.replace(/\*\*/g, '');
+    // 쉼표로 된 태그 → 첫 번째 의미 있는 것만 (또는 전체를 · 로 구분)
+    if (name.includes(',')) name = name.split(',').filter(s => s.trim()).join(' · ');
+    // 언더스코어/하이픈 정리
+    name = name.replace(/[-_]/g, ' ').trim();
+    return name || filename.replace(/\.md$/i, '').replace(/[-_]/g, ' ');
 }
 const GITHUB_REPO = 'iopoio/think-tank-inbox';
 const STATE = {
