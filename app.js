@@ -236,10 +236,13 @@ function statusIndicator(path) {
     return { icon: '●', color: 'text-amber-500', label: '안읽음', opacity: '', sort: 0 };
 }
 
-function renderItemCard(item, path, title, section) {
+function renderItemCard(item, path, title) {
     const st = statusIndicator(path);
+    const safeUrl = encodeURIComponent(item.url);
+    const safePath = encodeURIComponent(path);
+    const safeTitle = encodeURIComponent(title);
     return `
-    <div class="card cursor-pointer transition-all ${st.opacity}" onclick="openItemViewer('${item.url}', '${path}', '${title.replace(/'/g, "\\'")}', '${section}')">
+    <div class="card cursor-pointer transition-all ${st.opacity}" onclick="openItemViewerSafe('${safeUrl}', '${safePath}', '${safeTitle}')">
         <div class="flex items-center gap-3">
             <span class="${st.color} text-sm">${st.icon}</span>
             <div class="flex-1 min-w-0">
@@ -250,6 +253,10 @@ function renderItemCard(item, path, title, section) {
     </div>`;
 }
 
+function openItemViewerSafe(encodedUrl, encodedPath, encodedTitle) {
+    openItemViewer(decodeURIComponent(encodedUrl), decodeURIComponent(encodedPath), decodeURIComponent(encodedTitle));
+}
+
 function renderSortedItems(items, section, prefix) {
     const mapped = items.map(item => {
         const path = prefix ? `${prefix}/${item.name}` : `${section}/${item.name}`;
@@ -257,7 +264,7 @@ function renderSortedItems(items, section, prefix) {
         return { item, path, title, st: statusIndicator(path) };
     });
     mapped.sort((a, b) => a.st.sort - b.st.sort);
-    return mapped.map(m => renderItemCard(m.item, m.path, m.title, section)).join('');
+    return mapped.map(m => renderItemCard(m.item, m.path, m.title)).join('');
 }
 
 function statusSummary(items, prefix) {
