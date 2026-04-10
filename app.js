@@ -833,9 +833,21 @@ const el = (id) => document.getElementById(id);
 // ============================================================
 // 11. 부팅
 // ============================================================
+function showConnectGuide() {
+    const guide = `<div class="text-center py-16 px-6">
+        <div class="text-5xl mb-6">🔗</div>
+        <h3 class="text-xl font-extrabold mb-3">GitHub 연결이 필요합니다</h3>
+        <p class="text-sm text-gray-500 mb-6 leading-relaxed">데이터를 불러오려면 GitHub에 연결해주세요.<br>상단의 <strong>GitHub 연결</strong> 버튼을 눌러 토큰을 입력하면 됩니다.</p>
+    </div>`;
+    ['inbox-list', 'ideas-list', 'domains-grid', 'journal-list'].forEach(id => {
+        const e = el(id); if (e) e.innerHTML = guide;
+    });
+}
+
 function bootApp() {
     initTheme(); initTabs(); initGitHubAuth(); initModal(); initReminders(); initCharts(); initSearch();
     if (ghApi.isConnected()) loadLiveData();
+    else showConnectGuide();
     updateStats(); todos.updateBadge();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
