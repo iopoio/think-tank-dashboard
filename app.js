@@ -740,11 +740,15 @@ function initTheme() {
 }
 
 function initTabs() {
+    const tabTitles = { inbox: '받은함', ideas: '아이디어', domains: '도메인', journal: '회고', todos: '할일', stats: '통계' };
+    const tabDescs = { inbox: '새로운 인사이트가 도착했습니다.', ideas: '아이디어를 발전시키세요.', domains: '분야별 지식 베이스.', journal: '주간 회고와 진행 기록.', todos: '해야 할 것들을 모아두세요.', stats: '데이터 기반 성과 지표.' };
     window.switchTab = (tabId) => {
         STATE.activeTab = tabId;
         document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
         document.querySelectorAll('.mobile-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
         document.querySelectorAll('.tab-pane').forEach(el => el.classList.toggle('hidden', el.id !== `tab-${tabId}`));
+        const titleEl = el('tab-title-display'); if (titleEl) titleEl.textContent = tabTitles[tabId] || tabId;
+        const descEl = titleEl?.nextElementSibling; if (descEl) descEl.textContent = tabDescs[tabId] || '';
         if (tabId === 'todos') todos.render();
         if (tabId === 'stats') refreshCharts();
     };

@@ -149,7 +149,7 @@
 
             <!-- Reminders Section (Desktop) -->
             <div class="mt-8 pt-8 border-t border-on-surface/5">
-                <h3 class="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.15em] px-3 mb-4">Reminders</h3>
+                <h3 class="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.15em] px-3 mb-4">리마인더</h3>
                 <div id="reminder-list" class="space-y-3 px-1">
                     <!-- Reminders injected here -->
                 </div>
@@ -186,8 +186,8 @@
             <!-- Header/Search -->
             <div class="flex items-center justify-between gap-6 mb-12 md:mb-16">
                 <div>
-                    <h2 id="tab-title-display" class="text-3xl md:text-5xl font-extrabold font-display tracking-tighter mb-2">Inbox</h2>
-                    <p class="text-on-surface-variant text-xs md:text-sm font-medium">Your digital foyer. Captured thoughts awaiting curation.</p>
+                    <h2 id="tab-title-display" class="text-3xl md:text-5xl font-extrabold font-display tracking-tighter mb-2">받은함</h2>
+                    <p class="text-on-surface-variant text-xs md:text-sm font-medium">새로운 인사이트가 도착했습니다.</p>
                 </div>
                 <div class="flex items-center gap-4">
                     <div class="relative group hidden md:block">
@@ -196,7 +196,7 @@
                     </div>
                     <button id="refresh-all" class="p-3.5 rounded-2xl bg-surface-lowest shadow-sm hover:shadow-md transition-all">🔄</button>
                     <div id="github-auth" class="hidden md:block">
-                        <button id="connect-github" class="p-3.5 rounded-2xl bg-on-surface text-surface-lowest font-bold text-xs shadow-sm hover:opacity-90 transition-all">Connect Hub</button>
+                        <button id="connect-github" class="px-4 py-3 rounded-2xl bg-on-surface text-surface-lowest font-bold text-xs shadow-sm hover:opacity-90 transition-all">GitHub 연결</button>
                     </div>
                 </div>
             </div>
@@ -278,49 +278,47 @@
                         <!-- Stat Summary Cards -->
                         <div class="lg:col-span-12 grid grid-cols-2 lg:grid-cols-4 gap-6">
                             <div class="card !p-8 flex flex-col justify-between h-44">
-                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Total Entries</p>
-                                <h3 id="stat-total-intake" class="text-5xl font-extrabold font-display leading-none">1,284</h3>
-                                <p class="text-primary text-[10px] font-bold">↗ +12% from last month</p>
+                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">읽은 항목</p>
+                                <h3 id="stat-total-intake" class="text-5xl font-extrabold font-display leading-none">0</h3>
+                                <p class="text-primary text-[10px] font-bold">전체 읽음 수</p>
                             </div>
                             <div class="card !p-8 flex flex-col justify-between h-44">
-                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Weekly Intake</p>
-                                <h3 id="stat-execution-rate" class="text-5xl font-extrabold font-display leading-none">42</h3>
-                                <p class="text-emerald-500 text-[10px] font-bold">↗ +5 new today</p>
+                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">실행률</p>
+                                <h3 id="stat-execution-rate" class="text-5xl font-extrabold font-display leading-none">0%</h3>
+                                <p class="text-emerald-500 text-[10px] font-bold">완료 / 전체 할일</p>
                             </div>
                             <div class="card !p-8 flex flex-col justify-between h-44">
-                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Tasks Done</p>
-                                <h3 id="stat-active-domains" class="text-5xl font-extrabold font-display leading-none">186</h3>
-                                <p class="text-on-surface-variant text-[10px] font-bold">✓ 94% completion rate</p>
+                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">완료한 할일</p>
+                                <h3 id="stat-active-domains" class="text-5xl font-extrabold font-display leading-none">0</h3>
+                                <p class="text-on-surface-variant text-[10px] font-bold">✓ 완료 건수</p>
                             </div>
                             <div class="card !p-8 flex flex-col justify-between h-44">
-                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">Active Domains</p>
-                                <div class="flex items-baseline gap-2">
-                                    <h3 class="text-5xl font-extrabold font-display leading-none">14</h3>
-                                </div>
-                                <p class="text-primary text-[10px] font-bold">+ 2 active research sprints</p>
+                                <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest">활성 도메인</p>
+                                <h3 class="text-5xl font-extrabold font-display leading-none">-</h3>
+                                <p class="text-primary text-[10px] font-bold">GitHub 연결 후 표시</p>
                             </div>
                         </div>
 
                         <!-- Velocity Chart -->
                         <div class="lg:col-span-8 space-y-8">
                             <div>
-                                <h3 class="text-2xl font-extrabold font-display tracking-tight mb-8">Activity Velocity</h3>
+                                <h3 class="text-2xl font-extrabold font-display tracking-tight mb-8">주간 활동 추이</h3>
                                 <div class="card !p-10 h-[450px]">
                                     <canvas id="weekly-chart"></canvas>
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-6">
                                 <div class="card !p-6">
-                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase mb-2">Peak Time</p>
-                                    <p class="text-xl font-extrabold font-display">10:00 AM</p>
+                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase mb-2">피크 시간</p>
+                                    <p class="text-xl font-extrabold font-display">-</p>
                                 </div>
                                 <div class="card !p-6">
-                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase mb-2">Most Active</p>
-                                    <p class="text-xl font-extrabold font-display">Tuesday</p>
+                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase mb-2">가장 활발한 날</p>
+                                    <p class="text-xl font-extrabold font-display">-</p>
                                 </div>
                                 <div class="card !p-6">
-                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase mb-2">Curating Speed</p>
-                                    <p class="text-xl font-extrabold font-display">4.2 items/h</p>
+                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase mb-2">처리 속도</p>
+                                    <p class="text-xl font-extrabold font-display">-</p>
                                 </div>
                             </div>
                         </div>
@@ -329,14 +327,14 @@
                         <div class="lg:col-span-4 space-y-12">
                             <div>
                                 <div class="flex items-center justify-between mb-8">
-                                    <h3 class="text-xl font-extrabold font-display tracking-tight">Top Domains</h3>
+                                    <h3 class="text-xl font-extrabold font-display tracking-tight">상위 도메인</h3>
                                 </div>
                                 <div class="card !p-8 space-y-10">
                                     <div class="space-y-6">
                                         <div class="space-y-3">
                                             <div class="flex justify-between text-xs font-bold">
-                                                <span>Artificial Intelligence</span>
-                                                <span class="text-on-surface-variant">342 Items</span>
+                                                <span>AI</span>
+                                                <span class="text-on-surface-variant">- 건</span>
                                             </div>
                                             <div class="h-1.5 bg-surface-low rounded-full overflow-hidden">
                                                 <div class="h-full bg-primary rounded-full" style="width: 85%"></div>
@@ -344,8 +342,8 @@
                                         </div>
                                         <div class="space-y-3">
                                             <div class="flex justify-between text-xs font-bold">
-                                                <span>Sustainable Architecture</span>
-                                                <span class="text-on-surface-variant">210 Items</span>
+                                                <span>투자</span>
+                                                <span class="text-on-surface-variant">- 건</span>
                                             </div>
                                             <div class="h-1.5 bg-surface-low rounded-full overflow-hidden">
                                                 <div class="h-full bg-primary/60 rounded-full" style="width: 60%"></div>
@@ -353,22 +351,21 @@
                                         </div>
                                         <div class="space-y-3">
                                             <div class="flex justify-between text-xs font-bold">
-                                                <span>Editorial Design</span>
-                                                <span class="text-on-surface-variant">186 Items</span>
+                                                <span>효율화</span>
+                                                <span class="text-on-surface-variant">- 건</span>
                                             </div>
                                             <div class="h-1.5 bg-surface-low rounded-full overflow-hidden">
                                                 <div class="h-full bg-primary/40 rounded-full" style="width: 45%"></div>
                                             </div>
                                         </div>
                                     </div>
-                                    <button class="w-full py-3.5 rounded-2xl bg-surface-low text-xs font-bold hover:bg-surface-lowest transition-all">VIEW ALL DOMAINS</button>
+                                    <button onclick="switchTab('domains')" class="w-full py-3.5 rounded-2xl bg-surface-low text-xs font-bold hover:bg-surface-lowest transition-all">전체 도메인 보기</button>
                                 </div>
                             </div>
 
                             <div class="card !p-8 bg-primary/5 space-y-6">
-                                <h4 class="text-sm font-extrabold font-display">Weekly Growth Insight</h4>
-                                <p class="text-xs text-on-surface-variant leading-relaxed">Your curation frequency has increased by <span class="text-primary font-bold">24%</span> this week. You are focusing most on technical domains.</p>
-                                <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=400" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Stats Insight">
+                                <h4 class="text-sm font-extrabold font-display">주간 인사이트</h4>
+                                <p class="text-xs text-on-surface-variant leading-relaxed">데이터가 쌓이면 주간 패턴과 성장 인사이트가 여기에 표시됩니다.</p>
                             </div>
                         </div>
                     </div>
@@ -413,7 +410,7 @@
             <div class="flex-1 overflow-y-auto p-10 md:p-16">
                 <div class="flex items-center gap-2 mb-8 md:mb-10 text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em]">
                    <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
-                   IDEAS • DEEP WORK
+                   THINK TANK
                 </div>
                 <h2 id="modal-title" class="text-3xl md:text-4xl font-extrabold font-display tracking-tighter mb-8 leading-tight"></h2>
                 <div id="modal-body" class="text-base md:text-lg leading-relaxed text-on-surface opacity-90 space-y-4"></div>
