@@ -163,7 +163,10 @@ body.modal-open {
 }
 
 .cluster-card {
-    @apply relative bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3 shadow-sm hover:shadow-lg hover:border-primary/20 transition-all z-10 w-40 shrink-0;
+    @apply relative bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3 shadow-sm hover:shadow-lg hover:border-primary/20 transition-all z-10;
+}
+@media (min-width: 768px) {
+    .cluster-card { width: 10rem; flex-shrink: 0; }
 }
 
 .cluster-card.urgent {
