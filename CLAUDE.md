@@ -147,10 +147,13 @@ frontmatter: date, time, source, tags, status
 - GitHub Pages 배포 전 리포가 private인지 확인 (소스 코드 공개 방지)
 - OAuth 사용 시 redirect_uri를 정확한 도메인으로 제한
 
-### 코드 리뷰 시
+### 코드 리뷰 시 (제대리 핸드오프 보안 체크리스트)
 - 제대리(Gemini)가 작성한 코드도 보안 관점에서 반드시 클과장이 리뷰
 - 외부에서 가져온 코드(CDN, 라이브러리)는 출처와 버전 확인
-- PR 머지 전 `.env` 등 민감 파일이 포함되지 않았는지 확인
+- PR 머지 전 `.env`, `config.js` 등 민감 파일이 포함되지 않았는지 확인
+- **innerHTML에 외부 데이터 삽입 시 반드시 HTML 이스케이프** (실제 누락 사례: DNA 클러스터 뷰)
+- **id/class 속성에 사용자 데이터 넣을 때 특수문자 제거** (DOM injection 방지)
+- **git diff에서 토큰/키 패턴 검색 후 push** (`github_pat`, `ghp_`, `gho_` 등)
 
 ## 언어 규칙
 - UI 텍스트는 기본 한국어, 필요 시 영어 병기 (예: "받은함 (Inbox)")
