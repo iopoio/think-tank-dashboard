@@ -48,7 +48,8 @@ const ghApi = {
     },
 
     repoUrl(path = '') {
-        return `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`;
+        const encoded = path.split('/').map(p => encodeURIComponent(p)).join('/');
+        return `https://api.github.com/repos/${GITHUB_REPO}/contents/${encoded}`;
     },
 
     isConnected() { return !!this.token; }
@@ -561,7 +562,7 @@ async function loadIdeasFromGitHub(force = false) {
         const items = files.filter(f => f.type === 'file' && f.name.endsWith('.md'));
         list.innerHTML = statusSummary(items, 'ideas') + renderSortedItems(items, 'ideas');
         STATE.loaded.ideas = true;
-        dnaView.load(); // 미리 로드
+        await dnaView.load(); // 미리 로드
     } catch (e) { list.innerHTML = '<div class="card text-center py-12">ideas/ 로드 실패</div>'; }
 }
 
