@@ -1,5 +1,11 @@
 /** Think Tank Dashboard - app.js */
 const esc = (t) => t ? String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])) : '';
+// Lucide SVG 인라인 헬퍼 (innerHTML용)
+const icon = (name, cls = 'w-4 h-4') => `<i data-lucide="${name}" class="${cls}"></i>`;
+const refreshIcons = () => { if (typeof lucide !== 'undefined') lucide.createIcons(); };
+// 분류 아이콘/라벨
+const CLASSIFY_ICONS = { ideas: '💡', domains: '📚', journal: '📝', todo: '📌' };
+const CLASSIFY_LABELS = { ideas: '아이디어', domains: '도메인', journal: '회고', todo: '할일' };
 const GITHUB_REPO = 'iopoio/think-tank-inbox';
 const STATE = {
     theme: localStorage.getItem('theme') || 'light',
@@ -602,7 +608,7 @@ const dnaView = {
                 </div>
             </div>`;
         }).join('');
-        setTimeout(() => this.drawLines(), 100);
+        setTimeout(() => { this.drawLines(); refreshIcons(); }, 100);
     },
     renderClusterCards(items, theme) {
         return items.map(i => {
@@ -618,13 +624,13 @@ const dnaView = {
             }
             const onClick = (i.detail_path && i.detail_path !== 'None') ? `onclick="window.open('https://github.com/iopoio/think-tank-inbox/blob/main/${encodeURI(i.detail_path)}', '_blank')"` : '';
             return `<div id="card-${i.id}" class="cluster-card ${urgentClass} cursor-pointer" ${onClick}>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] text-gray-400 font-bold">${esc(i.year) || '-'}</span>
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[9px] text-on-variant/40 font-bold">${esc(i.year) || '-'}</span>
                     <span class="status-badge ${statusClass}">${statusLabels[i.status] || esc(i.status)}</span>
                 </div>
-                <h4 class="font-extrabold text-sm text-gray-800 dark:text-gray-100 mb-2 truncate">${esc(i.name)}</h4>
-                <div class="flex flex-wrap gap-1 mb-3">${keywords}</div>
-                <div class="flex items-center mt-auto">${ddayHtml}</div>
+                <h4 class="font-bold text-xs text-on-surface mb-1.5 leading-snug">${esc(i.name)}</h4>
+                <div class="flex flex-wrap gap-0.5 mb-2">${keywords}</div>
+                ${ddayHtml ? '<div class="mt-auto">' + ddayHtml + '</div>' : ''}
             </div>`;
         }).join('');
     },
@@ -652,7 +658,7 @@ async function loadDomainsFromGitHub(force = false) {
     if (!force && STATE.loaded.domains) return;
     const container = document.getElementById('domains-grid');
     container.innerHTML = '<div class="card animate-pulse h-32 col-span-full"></div>';
-    const icons = { 'AI': '🤖', '투자': '💰', '효율화': '⚡', '인테리어': '🏠', '기타': '📦', '미분류': '📄' };
+    const icons = { 'AI': 'cpu', '투자': 'trending-up', '효율화': 'zap', '인테리어': 'home', '기타': 'archive', '미분류': 'file-text' };
     const colors = { 'AI': 'from-indigo-400 to-indigo-600', '투자': 'from-amber-400 to-orange-500', '효율화': 'from-emerald-400 to-teal-600', '인테리어': 'from-pink-400 to-rose-500', '기타': 'from-gray-400 to-gray-500' };
     try {
         const folders = await ghApi.get(ghApi.repoUrl('domains/'));
@@ -666,14 +672,14 @@ async function loadDomainsFromGitHub(force = false) {
                 const items = files.filter(f => f.type === 'file');
                 const prefix = `domains/${folder.name}`;
                 html += `<div class="col-span-full"><div class="flex items-center gap-3 mb-3 mt-6">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center text-xl text-white">${icon}</div>
-                    <div><h3 class="font-extrabold text-lg font-outfit">${folder.name}</h3>${statusSummary(items, prefix)}</div>
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center text-white"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
+                    <div><h3 class="font-extrabold text-lg font-display">${folder.name}</h3>${statusSummary(items, prefix)}</div>
                 </div></div>`;
                 html += items.length === 0 ? '<div class="col-span-full text-sm text-gray-500 pl-14 mb-4">비어있음</div>' : renderSortedItems(items, 'domains', prefix);
             } catch { /* 빈 폴더 무시 */ }
         }
         container.innerHTML = html || '<div class="card text-center text-gray-500 py-12 col-span-full">도메인이 없습니다.</div>';
-        STATE.loaded.domains = true;
+        STATE.loaded.domains = true; refreshIcons();
     } catch (e) { container.innerHTML = '<div class="card text-center text-gray-500 py-12 col-span-full">domains/ 폴더를 찾을 수 없습니다.</div>'; }
 }
 
