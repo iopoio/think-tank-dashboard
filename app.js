@@ -616,7 +616,7 @@ const dnaView = {
                 if (diff <= 7) urgentClass = 'urgent';
                 ddayHtml = `<span class="status-badge bg-red-50 text-red-600 dark:bg-red-900/30 ml-auto">${ddayText}</span>`;
             }
-            const onClick = i.detail_path ? `onclick="window.open('https://github.com/iopoio/think-tank-inbox/blob/main/${encodeURI(i.detail_path)}', '_blank')"` : 'onclick="alert(\'상세 자료가 아직 연결되지 않았습니다.\')"';
+            const onClick = (i.detail_path && i.detail_path !== 'None') ? `onclick="window.open('https://github.com/iopoio/think-tank-inbox/blob/main/${encodeURI(i.detail_path)}', '_blank')"` : '';
             return `<div id="card-${i.id}" class="cluster-card ${urgentClass} cursor-pointer" ${onClick}>
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-[10px] text-gray-400 font-bold">${esc(i.year) || '-'}</span>
