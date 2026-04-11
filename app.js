@@ -787,8 +787,6 @@ function githubConnectHandler() {
 function initGitHubAuth() {
     updateAuthUI();
     ['connect-github', 'connect-github-mobile'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', githubConnectHandler); });
-    const r = document.getElementById('refresh-all');
-    if (r) r.addEventListener('click', () => { ghApi.isConnected() ? loadLiveData() : alert('먼저 GitHub에 연결해주세요.'); });
 }
 
 function updateAuthUI() {
@@ -854,14 +852,23 @@ const generator = {
     // sessionStorage 키
     _seenKey: 'tt_gen_seen',
     _currentKey: 'tt_gen_current',
+    _longSeenKey: 'tt_gen_long_seen',  // {path: timestamp} — 7일 쿨다운 (세션 간 유지)
+    _WEEK_MS: 7 * 24 * 60 * 60 * 1000,
 
     // seen 배열: 이번 세션에서 이미 본 경로들
     getSeen() { return JSON.parse(sessionStorage.getItem(this._seenKey) || '[]'); },
     addSeen(path) {
         const seen = this.getSeen();
         if (!seen.includes(path)) { seen.push(path); sessionStorage.setItem(this._seenKey, JSON.stringify(seen)); }
+        // 장기 쿨다운 기록: 7일 안에는 다시 등장 안 함
+        const longSeen = this.getLongSeen();
+        longSeen[path] = Date.now();
+        localStorage.setItem(this._longSeenKey, JSON.stringify(longSeen));
     },
     resetSeen() { sessionStorage.removeItem(this._seenKey); sessionStorage.removeItem(this._currentKey); },
+
+    // 장기 쿨다운 조회 (localStorage, 세션 간 유지)
+    getLongSeen() { return JSON.parse(localStorage.getItem(this._longSeenKey) || '{}'); },
 
     // 현재 카드 경로 저장/복원 (세션 내 재진입 시 유지)
     saveCurrent(picked) {
@@ -893,24 +900,23 @@ const generator = {
         return `${Math.floor(days / 365)}년 전`;
     },
 
-    // 30/90/180일(±7일) 구간 필터
-    isInWindow(days) {
-        const windows = [30, 90, 180];
-        return windows.some(w => Math.abs(days - w) <= 7);
-    },
-
-    // 추첨 풀 구성: ideas + domains 중 날짜 조건 + 중복(seen) 제외
+    // 추첨 풀 구성: 작성 후 7일 이상 + 세션 중복 제외 + 7일 장기 쿨다운
     buildPool() {
         const seen = this.getSeen();
+        const longSeen = this.getLongSeen();
+        const now = Date.now();
         const pool = [];
         const addItems = (items, section) => {
             for (const item of items) {
                 const path = item.path || `${section}/${item.name}`;
                 if (seen.includes(path)) continue;
+                // 장기 쿨다운: 최근 7일 내에 본 건 제외 (세션 넘어가도 유지)
+                if (longSeen[path] && (now - longSeen[path]) < this._WEEK_MS) continue;
                 const fileDate = this.parseDate(item.name);
                 if (!fileDate) continue;
                 const days = this.daysAgo(fileDate);
-                if (!this.isInWindow(days)) continue;
+                // 작성 후 7일 이상 경과한 것만 풀에 포함
+                if (days < 7) continue;
                 pool.push({ item, path, section, fileDate, days });
             }
         };

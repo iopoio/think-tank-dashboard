@@ -151,9 +151,6 @@
                 <div class="nav-item" data-tab="stats" onclick="switchTab('stats')">
                     <i data-lucide="bar-chart-3" class="w-5 h-5 mr-3 shrink-0"></i> 통계 (Stats)
                 </div>
-                <div class="nav-item" data-tab="generator" onclick="switchTab('generator')">
-                    <i data-lucide="zap" class="w-5 h-5 mr-3 shrink-0"></i> 생각 발전소 (Generator)
-                </div>
             </nav>
 
             <!-- Reminders Section (Desktop) -->
@@ -203,7 +200,7 @@
                         <input type="search" id="global-search" placeholder="항목 검색..." class="w-64 pl-10 pr-4 py-3 rounded-2xl bg-surface-low text-sm focus:ring-4 focus:ring-primary/5 outline-none transition-all">
                         <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
                     </div>
-                    <button id="refresh-all" class="p-3.5 rounded-2xl bg-surface-lowest shadow-sm hover:shadow-md transition-all">🔄</button>
+                    <button onclick="switchTab('generator')" class="p-3.5 rounded-2xl bg-surface-lowest shadow-sm hover:shadow-md transition-all flex items-center justify-center" title="생각 발전소"><i data-lucide="zap" class="w-5 h-5"></i></button>
                     <div id="github-auth" class="hidden md:block">
                         <button id="connect-github" class="px-4 py-3 rounded-2xl bg-on-surface text-surface-lowest font-bold text-xs shadow-sm hover:opacity-90 transition-all">GitHub 연결</button>
                     </div>
@@ -395,7 +392,7 @@
 
         <!-- 모바일 하단 탭바: Floating Glass Pill -->
         <div class="md:hidden fixed bottom-0 left-0 right-0 z-40 safe-bottom">
-            <nav class="bg-surface/95 backdrop-blur-xl border-t border-on-surface/5 px-3 py-3 flex justify-between items-center">
+            <nav class="bg-surface/95 backdrop-blur-xl border-t border-on-surface/5 px-6 py-3 flex justify-between items-center">
                 <button class="mobile-tab relative active" data-tab="inbox" onclick="switchTab('inbox')">
                     <i data-lucide="inbox" class="w-5 h-5"></i>
                     <span id="inbox-badge-mobile" class="absolute -top-1 -right-1 bg-primary text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold hidden">0</span>
@@ -415,9 +412,6 @@
                 </button>
                 <button class="mobile-tab relative" data-tab="stats" onclick="switchTab('stats')">
                     <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
-                </button>
-                <button class="mobile-tab relative" data-tab="generator" onclick="switchTab('generator')">
-                    <i data-lucide="zap" class="w-5 h-5"></i>
                 </button>
             </nav>
         </div>
