@@ -954,7 +954,7 @@ const generator = {
         return `<div class="card text-center py-16">
             <div class="text-4xl mb-4">⚡</div>
             <p class="text-lg font-bold text-on-surface dark:text-gray-100 mb-2">오늘은 발전할 연료가 없네요</p>
-            <p class="text-sm text-on-surface-variant dark:text-gray-400">30/90/180일 전 아이디어가 쌓이면 여기에 나타납니다.</p>
+            <p class="text-sm text-on-surface-variant dark:text-gray-400">일주일 이상 된 아이디어가 쌓이면 여기에 나타납니다.</p>
         </div>`;
     },
 
