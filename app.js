@@ -21,6 +21,8 @@ const STATE = {
     theme: localStorage.getItem('theme') || 'light',
     activeTab: 'inbox',
     inbox: [],
+    ideas: [],
+    domains: [],
     loaded: {},  // 탭별 로드 완료 플래그 (캐싱)
     reminders: [
         { text: '수요일 3시: Inbox 리뷰', icon: '📅', time: '매주 수 15:00' },
@@ -576,6 +578,7 @@ async function loadIdeasFromGitHub(force = false) {
     try {
         const files = await ghApi.get(ghApi.repoUrl('ideas/'));
         const items = files.filter(f => f.type === 'file' && f.name.endsWith('.md'));
+        STATE.ideas = items;
         list.innerHTML = statusSummary(items, 'ideas') + renderSortedItems(items, 'ideas');
         STATE.loaded.ideas = true;
         await dnaView.load(); // 미리 로드
@@ -670,6 +673,7 @@ async function loadDomainsFromGitHub(force = false) {
     try {
         const folders = await ghApi.get(ghApi.repoUrl('domains/'));
         let html = '';
+        STATE.domains = [];
         for (const folder of folders) {
             if (folder.type !== 'dir') continue;
             const icon = icons[folder.name] || '📁';
@@ -678,6 +682,7 @@ async function loadDomainsFromGitHub(force = false) {
                 const files = await ghApi.get(folder.url);
                 const items = files.filter(f => f.type === 'file');
                 const prefix = `domains/${folder.name}`;
+                STATE.domains.push(...items.map(i => ({ ...i, path: `${prefix}/${i.name}` })));
                 html += `<div class="col-span-full"><div class="flex items-center gap-3 mb-3 mt-6">
                     <div class="w-10 h-10 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center text-white"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
                     <div><h3 class="font-extrabold text-lg font-display">${folder.name}</h3>${statusSummary(items, prefix)}</div>
@@ -753,8 +758,8 @@ function initTheme() {
 }
 
 function initTabs() {
-    const tabTitles = { inbox: '받은함', ideas: '아이디어', domains: '도메인', journal: '회고', todos: '할일', stats: '통계' };
-    const tabDescs = { inbox: '새로운 인사이트가 도착했습니다.', ideas: '아이디어를 발전시키세요.', domains: '분야별 지식 베이스.', journal: '주간 회고와 진행 기록.', todos: '해야 할 것들을 모아두세요.', stats: '데이터 기반 성과 지표.' };
+    const tabTitles = { inbox: '받은함', ideas: '아이디어', domains: '도메인', journal: '회고', todos: '할일', stats: '통계', generator: '생각 발전소' };
+    const tabDescs = { inbox: '새로운 인사이트가 도착했습니다.', ideas: '아이디어를 발전시키세요.', domains: '분야별 지식 베이스.', journal: '주간 회고와 진행 기록.', todos: '해야 할 것들을 모아두세요.', stats: '데이터 기반 성과 지표.', generator: '과거의 생각을 연료로 발전하세요.' };
     window.switchTab = (tabId) => {
         STATE.activeTab = tabId;
         document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
@@ -764,6 +769,7 @@ function initTabs() {
         const descEl = titleEl?.nextElementSibling; if (descEl) descEl.textContent = tabDescs[tabId] || '';
         if (tabId === 'todos') todos.render();
         if (tabId === 'stats') refreshCharts();
+        if (tabId === 'generator') generator.run();
     };
 }
 
@@ -840,6 +846,369 @@ function initSearch() {
     const input = el('global-search'); if (!input) return;
     input.addEventListener('input', (e) => { if (e.target.value.length > 2) console.log('검색:', e.target.value); });
 }
+
+// ============================================================
+// 12. 생각 발전소 (Generator) — 3단계: 추첨 + 카드 + 🎲 재추첨
+// ============================================================
+const generator = {
+    // sessionStorage 키
+    _seenKey: 'tt_gen_seen',
+    _currentKey: 'tt_gen_current',
+
+    // seen 배열: 이번 세션에서 이미 본 경로들
+    getSeen() { return JSON.parse(sessionStorage.getItem(this._seenKey) || '[]'); },
+    addSeen(path) {
+        const seen = this.getSeen();
+        if (!seen.includes(path)) { seen.push(path); sessionStorage.setItem(this._seenKey, JSON.stringify(seen)); }
+    },
+    resetSeen() { sessionStorage.removeItem(this._seenKey); sessionStorage.removeItem(this._currentKey); },
+
+    // 현재 카드 경로 저장/복원 (세션 내 재진입 시 유지)
+    saveCurrent(picked) {
+        if (picked) sessionStorage.setItem(this._currentKey, JSON.stringify(picked));
+        else sessionStorage.removeItem(this._currentKey);
+    },
+    loadCurrent() {
+        const raw = sessionStorage.getItem(this._currentKey);
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+    },
+
+    // 파일명에서 날짜 추출
+    parseDate(filename) {
+        const m = filename.match(/^(\d{4})[-.]?(\d{2})[-.]?(\d{2})/);
+        return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+    },
+
+    // 경과일 계산
+    daysAgo(date) {
+        return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+    },
+
+    // 경과일 → 읽기 좋은 텍스트
+    daysAgoLabel(days) {
+        if (days < 7) return `${days}일 전`;
+        if (days < 30) return `${Math.floor(days / 7)}주 전`;
+        if (days < 365) return `${Math.floor(days / 30)}개월 전`;
+        return `${Math.floor(days / 365)}년 전`;
+    },
+
+    // 30/90/180일(±7일) 구간 필터
+    isInWindow(days) {
+        const windows = [30, 90, 180];
+        return windows.some(w => Math.abs(days - w) <= 7);
+    },
+
+    // 추첨 풀 구성: ideas + domains 중 날짜 조건 + 중복(seen) 제외
+    buildPool() {
+        const seen = this.getSeen();
+        const pool = [];
+        const addItems = (items, section) => {
+            for (const item of items) {
+                const path = item.path || `${section}/${item.name}`;
+                if (seen.includes(path)) continue;
+                const fileDate = this.parseDate(item.name);
+                if (!fileDate) continue;
+                const days = this.daysAgo(fileDate);
+                if (!this.isInWindow(days)) continue;
+                pool.push({ item, path, section, fileDate, days });
+            }
+        };
+        addItems(STATE.ideas, 'ideas');
+        addItems(STATE.domains, 'domains');
+        return pool;
+    },
+
+    // 랜덤 1건 선택
+    pick() {
+        const pool = this.buildPool();
+        if (pool.length === 0) return null;
+        return pool[Math.floor(Math.random() * pool.length)];
+    },
+
+    // 본문 요약 추출 (frontmatter 이후 첫 2~3줄)
+    extractSummary(text) {
+        let body = text.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').trim();
+        const lines = body.split('\n').filter(l => l.trim()).slice(0, 3);
+        return lines.join('\n');
+    },
+
+    // 풀 소진 안내 카드
+    renderExhausted() {
+        return `<div class="card text-center py-16">
+            <div class="text-4xl mb-4">🔋</div>
+            <p class="text-lg font-bold text-on-surface dark:text-gray-100 mb-2">모든 연료를 다 썼네요</p>
+            <p class="text-sm text-on-surface-variant dark:text-gray-400 mb-6">이번 세션에서 추첨 가능한 카드를 모두 확인했습니다.</p>
+            <button onclick="generator.handleReset()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all">🔄 처음부터 다시 보기</button>
+        </div>`;
+    },
+
+    // 데이터 없음 안내 카드
+    renderEmpty() {
+        return `<div class="card text-center py-16">
+            <div class="text-4xl mb-4">⚡</div>
+            <p class="text-lg font-bold text-on-surface dark:text-gray-100 mb-2">오늘은 발전할 연료가 없네요</p>
+            <p class="text-sm text-on-surface-variant dark:text-gray-400">30/90/180일 전 아이디어가 쌓이면 여기에 나타납니다.</p>
+        </div>`;
+    },
+
+    // 카드 HTML 렌더링 (XSS 방지: esc() 전역 함수 사용)
+    renderCard(picked) {
+        const { item, path, section, days } = picked;
+        const title = esc(cleanTitle(item.name));
+        const daysLabel = esc(this.daysAgoLabel(days));
+        const sectionIcon = section === 'ideas' ? '💡' : '📚';
+        const sectionLabel = section === 'ideas' ? '아이디어' : '도메인';
+        const isBookmarked = this.isBookmarked(path);
+        const bookmarkLabel = isBookmarked ? '📌 북마크됨' : '📌 북마크';
+        const bookmarkStyle = isBookmarked
+            ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700';
+
+        return `<div id="gen-card" class="card p-0 overflow-hidden">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-6">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-white/70 text-xs font-bold uppercase tracking-widest">${sectionIcon} ${esc(sectionLabel)}</span>
+                    <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-bold">🕐 ${daysLabel}</span>
+                </div>
+                <h3 class="text-white text-xl font-extrabold font-display leading-tight">${title}</h3>
+            </div>
+            <div id="gen-card-body" class="p-6">
+                <div class="animate-pulse space-y-2">
+                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                </div>
+            </div>
+            <div class="px-6 pb-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">액션</p>
+                <div class="flex gap-2 flex-wrap mb-3">
+                    <button onclick="generator.handleAction('revive')" class="gen-action-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-all active:scale-95">🔥 다시 살리기</button>
+                    <button onclick="generator.handleAction('bookmark')" class="gen-action-btn px-3 py-1.5 rounded-lg text-xs font-bold ${bookmarkStyle} transition-all active:scale-95">${bookmarkLabel}</button>
+                    <button onclick="generator.handleAction('realized')" class="gen-action-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all active:scale-95">✅ 이미 했음</button>
+                    <button onclick="generator.handleAction('archived')" class="gen-action-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95">🗑️ 그만 봄</button>
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="generator.handleReroll()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-bold text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all active:scale-95">🎲 다시 추첨</button>
+                </div>
+            </div>
+        </div>`;
+    },
+
+    // ── 토스트 알림 ──
+    showToast(message, type = 'info') {
+        const existing = document.getElementById('gen-toast');
+        if (existing) existing.remove();
+        const colors = { success: 'bg-emerald-600', error: 'bg-red-600', info: 'bg-indigo-600', warning: 'bg-amber-600' };
+        const toast = document.createElement('div');
+        toast.id = 'gen-toast';
+        toast.className = `fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 ${colors[type] || colors.info} text-white px-5 py-3 rounded-xl shadow-lg text-sm font-bold z-50 transition-all`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+    },
+
+    // ── 북마크 관리 (localStorage) ──
+    _bookmarkKey: 'tt_gen_bookmarks',
+    getBookmarks() { return JSON.parse(localStorage.getItem(this._bookmarkKey) || '[]'); },
+    isBookmarked(path) { return this.getBookmarks().includes(path); },
+    toggleBookmark(path) {
+        const bm = this.getBookmarks();
+        const idx = bm.indexOf(path);
+        if (idx >= 0) { bm.splice(idx, 1); } else { bm.push(path); }
+        localStorage.setItem(this._bookmarkKey, JSON.stringify(bm));
+        return idx < 0;
+    },
+
+    // ── frontmatter status 수정 ──
+    updateFrontmatterStatus(content, newStatus) {
+        if (/^status:\s*.+$/m.test(content)) {
+            return content.replace(/^status:\s*.+$/m, `status: ${newStatus}`);
+        }
+        if (/^---\s*$/m.test(content)) {
+            return content.replace(/^(---\s*\n[\s\S]*?)(^---)/m, `$1status: ${newStatus}\n$2`);
+        }
+        return null;
+    },
+
+    // ── GitHub API PUT: frontmatter status 전이 ──
+    async updateStatusOnGitHub(path, newStatus) {
+        const fileData = await ghApi.get(ghApi.repoUrl(path));
+        const raw = atob(fileData.content);
+        const decoded = new TextDecoder('utf-8').decode(Uint8Array.from(raw, c => c.charCodeAt(0)));
+        const updated = this.updateFrontmatterStatus(decoded, newStatus);
+        if (updated === null) throw { status: 422, _msg: '파일에 frontmatter가 없습니다.' };
+        const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(updated)));
+        await ghApi.put(ghApi.repoUrl(path), {
+            message: `[발전소] ${cleanTitle(path.split('/').pop())} → ${newStatus}`,
+            content: encoded, sha: fileData.sha,
+        });
+    },
+
+    // ── 에러 메시지 (보안: 원본 API 에러 노출 금지) ──
+    friendlyError(err) {
+        const msg = err?.message || '';
+        if (err?._msg) return err._msg;
+        if (msg.includes('401')) return 'GitHub 인증 만료. 재연결해주세요.';
+        if (msg.includes('404')) return '파일을 찾을 수 없습니다.';
+        if (msg.includes('409')) return '파일이 동시에 수정됐습니다. 다시 시도해주세요.';
+        return '처리 중 문제가 발생했습니다.';
+    },
+
+    // ── 액션 핸들러 (낙관적 UI 업데이트) ──
+    async handleAction(action) {
+        const saved = this.loadCurrent();
+        if (!saved || !saved.path) return;
+        const path = saved.path;
+
+        // 📌 북마크: localStorage만
+        if (action === 'bookmark') {
+            const added = this.toggleBookmark(path);
+            this.showToast(added ? '📌 북마크에 추가했습니다.' : '📌 북마크를 해제했습니다.', 'success');
+            saved.fileDate = this.parseDate(saved.item.name);
+            saved.days = saved.fileDate ? this.daysAgo(saved.fileDate) : saved.days;
+            const container = el('generator-container');
+            if (container) { container.innerHTML = this.renderCard(saved); await this.loadCardContent(saved); }
+            return;
+        }
+
+        // 낙관적 UI: 먼저 다음 카드로 전환
+        this.saveCurrent(null);
+        this.handleReroll();
+        const actionLabels = { revive: '🔥 다시 살리기', realized: '✅ 이미 했음', archived: '🗑️ 그만 봄' };
+        this.showToast(`${actionLabels[action] || action} 처리 중...`, 'info');
+
+        if (!ghApi.isConnected()) {
+            this.showToast('GitHub 미연결. 연결 후 다시 시도해주세요.', 'warning');
+            return;
+        }
+        try {
+            await this.updateStatusOnGitHub(path, action);
+            this.showToast(`${actionLabels[action]} 완료!`, 'success');
+        } catch (err) {
+            if (err?.message?.includes('409')) {
+                try { await this.updateStatusOnGitHub(path, action); this.showToast(`${actionLabels[action]} 완료! (재시도)`, 'success'); return; }
+                catch (retryErr) { this.showToast(this.friendlyError(retryErr), 'error'); return; }
+            }
+            this.showToast(this.friendlyError(err), 'error');
+        }
+    },
+
+    // 카드 본문 비동기 로드 (목데이터 모드: url 없으면 목 콘텐츠 표시)
+    async loadCardContent(picked) {
+        if (!picked) return;
+        const bodyEl = document.getElementById('gen-card-body');
+        if (!bodyEl) return;
+
+        // url이 없는 경우 (목데이터) → 목 콘텐츠 표시
+        if (!picked.item.url) {
+            bodyEl.innerHTML = `<div class="text-sm text-on-surface-variant dark:text-gray-300 leading-relaxed border-l-2 border-indigo-200 dark:border-indigo-700 pl-3">${esc(cleanTitle(picked.item.name))} — 상세 내용은 GitHub 연결 후 확인 가능합니다.</div>`;
+            this.addSeen(picked.path);
+            return;
+        }
+
+        try {
+            const fileData = await ghApi.get(picked.item.url);
+            const raw = atob(fileData.content);
+            const decoded = new TextDecoder('utf-8').decode(Uint8Array.from(raw, c => c.charCodeAt(0)));
+            const meta = parseFrontmatter(decoded);
+            const conf = parseConfidence(decoded);
+            const summary = this.extractSummary(decoded);
+            const tags = [].concat(meta.tags || []);
+
+            let html = '';
+            if (tags.length > 0) {
+                html += `<div class="flex gap-1.5 flex-wrap mb-3">${tags.map(t => `<span class="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-bold">${esc(t)}</span>`).join('')}</div>`;
+            }
+            if (conf) { html += `<div class="mb-3">${confidenceBadge(conf)}</div>`; }
+            if (summary) {
+                html += `<div class="text-sm text-on-surface-variant dark:text-gray-300 leading-relaxed border-l-2 border-indigo-200 dark:border-indigo-700 pl-3">${esc(summary)}</div>`;
+            } else {
+                html += `<p class="text-sm text-gray-400 italic">본문이 비어있습니다.</p>`;
+            }
+            if (meta.status) {
+                html += `<div class="mt-3"><span class="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-bold">상태: ${esc(meta.status)}</span></div>`;
+            }
+            bodyEl.innerHTML = html;
+            this.addSeen(picked.path);
+        } catch {
+            bodyEl.innerHTML = '<p class="text-sm text-red-400">내용을 불러올 수 없습니다.</p>';
+        }
+    },
+
+    // 데이터 미로드 시 lazy load
+    async ensureData() {
+        if (!ghApi.isConnected()) return;
+        if (!STATE.loaded.ideas) await loadIdeasFromGitHub();
+        if (!STATE.loaded.domains) await loadDomainsFromGitHub();
+    },
+
+    // 🎲 다시 추첨 핸들러
+    handleReroll() {
+        const container = el('generator-container');
+        if (!container) return;
+        const picked = this.pick();
+        if (!picked) {
+            // 풀 소진
+            container.innerHTML = this.renderExhausted();
+            this.saveCurrent(null);
+            return;
+        }
+        container.innerHTML = this.renderCard(picked);
+        this.saveCurrent(picked);
+        refreshIcons();
+        this.loadCardContent(picked);
+    },
+
+    // 🔄 리셋 핸들러
+    handleReset() {
+        this.resetSeen();
+        this.run();
+    },
+
+    // 메인 실행: 탭 진입 시 호출
+    async run() {
+        const container = el('generator-container');
+        if (!container) return;
+
+        // 세션 내 현재 카드가 있으면 재노출
+        const saved = this.loadCurrent();
+        if (saved && saved.path) {
+            // 날짜 재계산 (Date 객체는 직렬화 안 됨)
+            saved.fileDate = this.parseDate(saved.item.name);
+            saved.days = saved.fileDate ? this.daysAgo(saved.fileDate) : saved.days;
+            container.innerHTML = this.renderCard(saved);
+            refreshIcons();
+            await this.loadCardContent(saved);
+            return;
+        }
+
+        // 로딩 표시
+        container.innerHTML = `<div class="card text-center py-12 animate-pulse">
+            <i data-lucide="zap" class="w-10 h-10 mx-auto mb-3 text-indigo-300"></i>
+            <p class="text-sm text-gray-400">추첨 풀을 구성하는 중...</p>
+        </div>`;
+        refreshIcons();
+
+        // 데이터 확보
+        await this.ensureData();
+
+        // 추첨
+        const picked = this.pick();
+        if (!picked) {
+            // 풀이 비었는지 vs 데이터 자체가 없는지 구분
+            const totalItems = (STATE.ideas?.length || 0) + (STATE.domains?.length || 0);
+            container.innerHTML = totalItems > 0 && this.getSeen().length > 0
+                ? this.renderExhausted()
+                : this.renderEmpty();
+            return;
+        }
+        container.innerHTML = this.renderCard(picked);
+        this.saveCurrent(picked);
+        refreshIcons();
+        await this.loadCardContent(picked);
+    },
+};
+
 
 const el = (id) => document.getElementById(id);
 

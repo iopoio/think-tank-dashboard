@@ -15,6 +15,10 @@ config.js
 stitch/
 stitch_think_tank/
 
+# 검증/임시 파일 (로컬 전용)
+scratch/
+test_screenshot.py
+
 # OS 파일
 .DS_Store
 Thumbs.db
